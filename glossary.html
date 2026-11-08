@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CME 295 – Cross-Lecture Glossary</title>
+<meta name="description" content="Combined glossary of the key terms from the published CME 295 lecture reports, with the lectures that define each.">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/course.css">
+<style>
+ main.home{max-width:900px;margin:0 auto;padding:40px 20px 80px}
+ .azbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 10px;font-weight:600}
+ .azbar a{text-decoration:none;padding:2px 6px;border-radius:6px} .azbar a:hover{background:var(--accent-soft)}
+ .gl-letter{margin:28px 0 4px;color:var(--accent)}
+ .glossary .term ul{list-style:none;margin:4px 0 0;padding:0}
+ .glossary .term li{margin:4px 0}
+ a.lecbadge{display:inline-block;min-width:2.2em;text-align:center;font-size:.75rem;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent);text-decoration:none;margin-right:4px}
+</style>
+</head>
+<body>
+<main class="home">
+  <header class="hero">
+    <div class="kicker"><a href="index.html">CME 295</a> · Glossary</div>
+    <h1>Cross-Lecture Glossary</h1>
+    <p class="lead">42 terms (42 definitions) merged from the key-terms chapter of the published lectures.
+    A badge such as <a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E">L1</a> links to the lecture that gives that definition; the bracket shows the chapter.</p>
+  </header>
+  <input type="text" id="gloss-filter" placeholder="Filter terms…" style="width:100%;max-width:420px" aria-label="Filter terms">
+  <div class="azbar" id="azbar"><a href="#L-A">A</a> <a href="#L-B">B</a> <a href="#L-C">C</a> <a href="#L-D">D</a> <a href="#L-E">E</a> <a href="#L-F">F</a> <a href="#L-H">H</a> <a href="#L-K">K</a> <a href="#L-L">L</a> <a href="#L-M">M</a> <a href="#L-N">N</a> <a href="#L-O">O</a> <a href="#L-P">P</a> <a href="#L-R">R</a> <a href="#L-S">S</a> <a href="#L-T">T</a> <a href="#L-V">V</a> <a href="#L-W">W</a></div>
+  <div class="glossary" id="glossary">
+<h2 class="gl-letter" id="L-A">A</h2>
+<div class="term"><h4>Accuracy</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Fraction of predictions that are correct. Misleading with imbalanced classes.</span> <span class="where">(B0, C)</span></li></ul></div>
+<div class="term"><h4>Activation / hidden state / context vector</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>The vector an RNN keeps as a summary of the sequence so far; $\mathbf h_t$ (also $\mathbf a_t$).</span> <span class="where">(B3)</span></li></ul></div>
+<div class="term"><h4>Attention</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Mechanism giving a position a direct, learned, weighted link to other positions (2014); core of the Transformer.</span> <span class="where">(B4)</span></li></ul></div>
+<h2 class="gl-letter" id="L-B">B</h2>
+<div class="term"><h4>BLEU (bilingual evaluation understudy)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Reference-based translation metric; higher is better.</span> <span class="where">(A, B0)</span></li></ul></div>
+<div class="term"><h4>BOS / EOS tokens</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Special tokens marking the start and end of a sequence; generation stops when EOS is produced.</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>BPE (byte-pair encoding)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Subword tokenizer that iteratively merges the most frequent adjacent pair (2026 lecture).</span> <span class="where">(B1)</span></li></ul></div>
+<h2 class="gl-letter" id="L-C">C</h2>
+<div class="term"><h4>Causal / masked attention</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Self-attention in which position $i$ may only see positions $\le i$.</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>CBOW (continuous bag of words)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>word2vec variant: predict a word from the words around it.</span> <span class="where">(B2)</span></li></ul></div>
+<div class="term"><h4>Cell state</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Extra memory track $\mathbf c_t$ of an LSTM, next to the hidden state.</span> <span class="where">(B3)</span></li></ul></div>
+<div class="term"><h4>Cosine similarity</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>$\cos\theta=\mathbf a\cdot\mathbf b/(\lVert\mathbf a\rVert\lVert\mathbf b\rVert)$; similarity of direction.</span> <span class="where">(B2)</span></li></ul></div>
+<div class="term"><h4>Cross-attention</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Attention whose queries come from the decoder and keys/values from the encoder output.</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>Cross-entropy</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Training loss $-\log$ of the probability given to the right word.</span> <span class="where">(B2)</span></li></ul></div>
+<h2 class="gl-letter" id="L-D">D</h2>
+<div class="term"><h4>Decoder</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Half of the Transformer that produces the output sequence token by token.</span> <span class="where">(B6)</span></li></ul></div>
+<h2 class="gl-letter" id="L-E">E</h2>
+<div class="term"><h4>Embedding</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Dense vector (size $D$, hundreds) representing a token; row of the embedding matrix.</span> <span class="where">(B2)</span></li></ul></div>
+<div class="term"><h4>Encoder</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Half of the Transformer that turns the input tokens into context-aware vectors.</span> <span class="where">(B6)</span></li></ul></div>
+<h2 class="gl-letter" id="L-F">F</h2>
+<div class="term"><h4>F1 score</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Harmonic mean of precision and recall.</span> <span class="where">(B0)</span></li></ul></div>
+<div class="term"><h4>Feed-forward network (FFN)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Two-layer network applied to each position after attention, with a wider hidden layer.</span> <span class="where">(B6)</span></li></ul></div>
+<h2 class="gl-letter" id="L-H">H</h2>
+<div class="term"><h4>Head (attention head)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>One set of projections $W_Q,W_K,W_V$; multi-head attention uses $h$ of them in parallel and mixes them with $W_O$.</span> <span class="where">(B5)</span></li></ul></div>
+<h2 class="gl-letter" id="L-K">K</h2>
+<div class="term"><h4>Key / Query / Value (K, Q, V)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Three learned projections of the input; query–key similarity gives the weights, applied to the values.</span> <span class="where">(B4)</span></li></ul></div>
+<h2 class="gl-letter" id="L-L">L</h2>
+<div class="term"><h4>Label smoothing</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Replace the one-hot target by $1-\varepsilon$ / $\varepsilon/(V-1)$ to make the model less over-confident.</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>Layer normalization</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Normalises the activations of a layer; helps convergence (2026 lecture).</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>LSTM (long short-term memory)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>RNN extension with a cell state to retain important information.</span> <span class="where">(B3)</span></li></ul></div>
+<h2 class="gl-letter" id="L-M">M</h2>
+<div class="term"><h4>Multi-classification</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>One label for each token of the text (NER, POS tagging).</span> <span class="where">(A)</span></li></ul></div>
+<h2 class="gl-letter" id="L-N">N</h2>
+<div class="term"><h4>NER (named-entity recognition)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Label words as location, time, person, …</span> <span class="where">(A)</span></li></ul></div>
+<div class="term"><h4>NLP</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Natural language processing – computing with text.</span> <span class="where">(A)</span></li></ul></div>
+<h2 class="gl-letter" id="L-O">O</h2>
+<div class="term"><h4>One-hot encoding (OHE)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Vector of length $V$ with a single 1 identifying the token.</span> <span class="where">(B2)</span></li></ul></div>
+<div class="term"><h4>OOV (out of vocabulary)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Token not seen at training time; mapped to <code>&lt;unk&gt;</code>.</span> <span class="where">(B1)</span></li></ul></div>
+<h2 class="gl-letter" id="L-P">P</h2>
+<div class="term"><h4>Perplexity</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>$\exp$ of the average negative log-probability; how surprised the model is; lower is better.</span> <span class="where">(B0)</span></li></ul></div>
+<div class="term"><h4>Position encoding / embedding</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Vector added to each token embedding to inform on position; sinusoidal in the original paper.</span> <span class="where">(B5)</span></li></ul></div>
+<div class="term"><h4>Precision / Recall</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Correct share of the predicted positives / found share of the true positives.</span> <span class="where">(B0)</span></li></ul></div>
+<div class="term"><h4>Proxy task</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Auxiliary task solved only to learn good representations.</span> <span class="where">(B2)</span></li></ul></div>
+<h2 class="gl-letter" id="L-R">R</h2>
+<div class="term"><h4>Residual connection</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Output = layer(x) + x; lets features pass directly and helps deep networks learn (2026 lecture).</span> <span class="where">(B6)</span></li></ul></div>
+<div class="term"><h4>RNN (recurrent neural network)</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Reads tokens one by one, carrying a hidden state.</span> <span class="where">(B3)</span></li></ul></div>
+<div class="term"><h4>ROUGE</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Suite of reference-based metrics (summarisation); higher is better.</span> <span class="where">(A)</span></li></ul></div>
+<h2 class="gl-letter" id="L-S">S</h2>
+<div class="term"><h4>Self-attention</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Attention among the tokens of the same sequence.</span> <span class="where">(B4)</span></li></ul></div>
+<div class="term"><h4>Skip-gram</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>word2vec variant: predict the surrounding words from a word.</span> <span class="where">(B2)</span></li></ul></div>
+<div class="term"><h4>Softmax</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Turns scores into a probability distribution: $e^{z_i}/\sum_j e^{z_j}$.</span> <span class="where">(B2, B4)</span></li></ul></div>
+<div class="term"><h4>Subword tokenization</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Splitting text into pieces between characters and words (e.g. bear + s).</span> <span class="where">(B1)</span></li></ul></div>
+<h2 class="gl-letter" id="L-T">T</h2>
+<div class="term"><h4>Token / Tokenization</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Unit of text seen by the model / the process of cutting text into them.</span> <span class="where">(B1)</span></li></ul></div>
+<div class="term"><h4>Transformer</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Encoder–decoder architecture built on attention (2017, “Attention Is All You Need”).</span> <span class="where">(B6)</span></li></ul></div>
+<h2 class="gl-letter" id="L-V">V</h2>
+<div class="term"><h4>Vanishing / exploding gradient</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>Product of many Jacobians going to 0 / ∞ during backpropagation through time.</span> <span class="where">(B3)</span></li></ul></div>
+<h2 class="gl-letter" id="L-W">W</h2>
+<div class="term"><h4>Word2vec</h4><ul><li><a class="lecbadge" href="Lecture_1/Lecture_1_report.html#E" title="Text to Attention">L1</a> <span>2013 method learning embeddings with a proxy task (CBOW / skip-gram); “king − man + woman ≈ queen”.</span> <span class="where">(B2)</span></li></ul></div>
+  </div>
+</main>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/auto-render.min.js"></script>
+<script src="assets/course.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', function(){
+  CourseUI.renderMath(document.body);
+  var f = document.getElementById('gloss-filter');
+  f.addEventListener('input', function(){
+    var v = f.value.toLowerCase(), shown = {};
+    document.querySelectorAll('.glossary .term').forEach(function(t){ t.dataset.hit = t.textContent.toLowerCase().includes(v) ? '1' : ''; });
+    document.querySelectorAll('.glossary > *').forEach(function(el){
+      if (el.classList.contains('gl-letter')) { var n = el.nextElementSibling, any = false;
+        while (n && !n.classList.contains('gl-letter')) { if (n.dataset.hit) any = true; n = n.nextElementSibling; }
+        el.style.display = any ? '' : 'none'; }
+      else el.style.display = el.dataset.hit ? '' : 'none';
+    });
+  }, true);
+});
+</script>
+</body>
+</html>

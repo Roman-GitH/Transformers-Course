@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecture 1 – Text to Attention</title>
+<meta name="description" content="CME 295 Lecture 1 study report: tokens, embeddings, RNNs, self-attention and the original Transformer, with a runnable mini model.">
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/course.css">
+<style>
+ .tok{display:inline-block;padding:3px 9px;margin:3px 4px 3px 0;border-radius:8px;border:1px solid var(--accent);background:var(--accent-soft);font-family:var(--mono);font-size:.92rem}
+ .tok.unk{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
+ .bar{height:14px;border-radius:7px;background:var(--accent);min-width:2px}
+ .metricgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+ .metric{background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center}
+ .metric b{display:block;font-size:1.35rem;font-family:var(--mono)} .metric span{font-size:.8rem;color:var(--muted)}
+ @media(max-width:600px){.metricgrid{grid-template-columns:repeat(2,1fr)}}
+ .legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 5px 0 12px;vertical-align:middle}
+ .step-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+ .stepbox{min-height:130px}
+ .tbl-small td,.tbl-small th{padding:5px 8px;font-size:.88rem}
+ svg .t1{fill:var(--c1)} svg .t2{fill:var(--c2)} svg .t3{fill:var(--c3)} svg .t4{fill:var(--c4)} svg .t5{fill:var(--c5)}
+ svg .arrow{stroke:var(--muted);stroke-width:1.6;fill:none;marker-end:url(#ah)} svg .dash{stroke-dasharray:5 4}
+ svg .big{font-size:15px;font-weight:700} svg .sm{font-size:12px} svg .xs{font-size:10.5px}
+ svg .wh{fill:#fff}
+ .mat{width:auto !important;border-collapse:separate;border-spacing:0;display:inline-table;vertical-align:middle;margin:4px 8px;font-family:var(--mono);font-size:.78rem;border-left:2px solid var(--text);border-right:2px solid var(--text);border-radius:5px}
+ .mat td,.mat th{padding:2px 7px;text-align:right;white-space:nowrap} .mat th{color:var(--muted);font-weight:500;font-size:.72rem}
+ .matrow{overflow-x:auto;padding:4px 0} .matcap{font-size:.82rem;color:var(--muted);margin:2px 0}
+ .cm td,.cm th{padding:7px 10px;font-size:.9rem;vertical-align:top} .cm .tp{background:color-mix(in srgb,var(--good) 16%,var(--surface))} .cm .tn{background:color-mix(in srgb,var(--good) 8%,var(--surface))}
+ .cm .fp,.cm .fn{background:color-mix(in srgb,var(--bad) 13%,var(--surface))}
+ .scroll-x{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="mobilebar" aria-label="Chapters">
+  <a href="#A">A Idea</a><a href="#B">B Exposition</a><a href="#C">C Practice</a><a href="#D">D Conclusions</a><a href="#E">E Terms</a>
+</div>
+<div class="layout">
+<nav class="toc" aria-label="Chapters">
+  <div class="brand">CME 295 · Lecture 1</div>
+  <h2>Text → Tokens → Embeddings → Attention</h2>
+  <a href="#A"><b>A</b> · The general idea</a>
+  <a href="#B"><b>B</b> · The exposition of the idea</a>
+  <a href="#C"><b>C</b> · Practical aspects</a>
+  <a href="#D"><b>D</b> · The conclusions</a>
+  <a href="#E"><b>E</b> · Key terms</a>
+  <div class="tools"><button data-theme-toggle>◐ Light / dark</button></div>
+  <p style="font-size:.8rem;color:var(--muted);margin-top:18px">Source: Stanford CME 295 (Autumn 2025), lecture 1 transcript. Notes marked <i>2026</i> come from the 2026 lecture 1; <i>Beyond the lecture</i> marks my additions.</p>
+</nav>
+<main>
+<header class="hero">
+  <div class="kicker">Stanford CME 295 · Transformers &amp; Large Language Models · Lecture 1</div>
+  <h1>From words to numbers to self-attention</h1>
+  <p class="lead">How do you make a machine read? Cut the text into tokens, give each token a vector, let every token look directly at every other token — and you have the Transformer.</p>
+</header>
+
+<!-- =============================================================== A -->
+<div id="checks" hidden></div><div id="w-dash" hidden></div><div id="d-proxy" hidden></div><div id="d-order" hidden></div><div id="d-sense" hidden></div><div id="d-plot" hidden></div><div id="d-read" hidden></div><div id="loss-ex" hidden></div><div id="loss-ex-body" hidden></div>
+<section class="chapter" id="A">
+<h2><span class="letter">A</span> The general idea</h2>
+
+<p>Models only understand numbers; text is a string of characters. Lecture 1 builds the bridge in five moves, each one fixing a weakness of the previous move:</p>
+
+<figure class="figure">
+<svg viewBox="0 0 920 230" role="img" aria-label="Pipeline from text to prediction">
+ <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker></defs>
+ <g class="sm">
+  <rect class="box" x="8" y="40" width="120" height="70" rx="12"/><text x="68" y="70" text-anchor="middle" class="big">Text</text><text x="68" y="92" text-anchor="middle" class="xs muted">"a cute teddy bear</text><text x="68" y="104" text-anchor="middle" class="xs muted">is reading"</text>
+  <rect class="box" x="160" y="40" width="120" height="70" rx="12"/><text x="220" y="68" text-anchor="middle" class="big">Tokens</text><text x="220" y="90" text-anchor="middle" class="xs muted">[a][cute][teddy]</text><text x="220" y="103" text-anchor="middle" class="xs muted">[bear][is][reading]</text>
+  <rect class="box" x="312" y="40" width="120" height="70" rx="12"/><text x="372" y="68" text-anchor="middle" class="big">Embeddings</text><text x="372" y="90" text-anchor="middle" class="xs muted">each token → vector</text><text x="372" y="103" text-anchor="middle" class="xs muted">(+ position)</text>
+  <rect class="acc" x="464" y="40" width="190" height="70" rx="12"/><text x="559" y="68" text-anchor="middle" class="big">Self-attention</text><text x="559" y="90" text-anchor="middle" class="xs">every token looks at</text><text x="559" y="103" text-anchor="middle" class="xs">every other token</text>
+  <rect class="box" x="686" y="40" width="120" height="70" rx="12"/><text x="746" y="68" text-anchor="middle" class="big">Softmax</text><text x="746" y="90" text-anchor="middle" class="xs muted">probabilities over</text><text x="746" y="103" text-anchor="middle" class="xs muted">the vocabulary</text>
+  <rect class="box" x="838" y="40" width="74" height="70" rx="12"/><text x="875" y="70" text-anchor="middle" class="big">Task</text><text x="875" y="92" text-anchor="middle" class="xs muted">label /</text><text x="875" y="104" text-anchor="middle" class="xs muted">next word</text>
+ </g>
+ <path class="arrow" d="M128 75H158"/><path class="arrow" d="M280 75H310"/><path class="arrow" d="M432 75H462"/><path class="arrow" d="M654 75H684"/><path class="arrow" d="M806 75H836"/>
+ <g class="sm">
+  <text x="220" y="150" text-anchor="middle" class="t1 big">1</text><text x="220" y="170" text-anchor="middle" class="xs">cut the text up</text><text x="220" y="184" text-anchor="middle" class="xs">(tokenization)</text>
+  <text x="372" y="150" text-anchor="middle" class="t2 big">2</text><text x="372" y="170" text-anchor="middle" class="xs">meaningful vectors</text><text x="372" y="184" text-anchor="middle" class="xs">(word2vec idea)</text>
+  <text x="559" y="150" text-anchor="middle" class="t3 big">3 → 4</text><text x="559" y="170" text-anchor="middle" class="xs">RNN forgets &amp; is slow</text><text x="559" y="184" text-anchor="middle" class="xs">→ attention → Transformer</text>
+  <text x="746" y="150" text-anchor="middle" class="t5 big">5</text><text x="746" y="170" text-anchor="middle" class="xs">train with a loss</text><text x="746" y="184" text-anchor="middle" class="xs">(+ label smoothing)</text>
+ </g>
+</svg>
+<figcaption>Figure A1 – The lecture's pipeline. Numbers mark the five moves; chapter B follows the same order.</figcaption>
+</figure>
+
+<div class="grid2">
+ <div class="card"><div class="cardtitle">What problem is being solved?</div>
+  <p>NLP tasks fall into three buckets (below). All of them need a representation of text that a model can compute with, <b>that preserves meaning</b>, and that depends on <b>context</b> (a <i>bank</i> by a river is not a <i>bank</i> that lends money).</p></div>
+ <div class="card"><div class="cardtitle">The key insight in one line</div>
+  <p>Instead of reading a sentence word by word and hoping a hidden state remembers the start (RNN), give every token <b>direct links</b> to all other tokens and let the model <i>learn</i> how much to look at each: <b>attention</b>. “Attention is all you need” (2017).</p></div>
+</div>
+
+<h3>Three buckets of NLP tasks</h3>
+<table>
+ <tr><th>Bucket</th><th>Input → output</th><th>Examples</th><th>Typical metrics</th></tr>
+ <tr><td><b>Classification</b></td><td>text → one label</td><td>sentiment (IMDb, Amazon reviews), intent detection, language ID, topic</td><td>accuracy, precision, recall, F1</td></tr>
+ <tr><td><b>Multi-classification</b></td><td>text → one label per token</td><td>named-entity recognition (NER), part-of-speech tagging, parsing</td><td>the same metrics, per token or per entity type</td></tr>
+ <tr><td><b>Generation</b></td><td>text → text of variable length</td><td>translation (WMT), question answering, summarization, code/poem writing</td><td>BLEU, ROUGE (need a reference), perplexity (model's own probabilities)</td></tr>
+</table>
+
+<figure class="figure">
+<svg viewBox="0 0 920 150" role="img" aria-label="Timeline">
+ <line x1="30" y1="75" x2="890" y2="75" class="line"/>
+ <g class="sm" text-anchor="middle">
+  <circle cx="80" cy="75" r="8" class="t1"/><text x="80" y="50" class="big">1980s</text><text x="80" y="102">RNN</text><text x="80" y="118" class="xs muted">order-aware</text>
+  <circle cx="250" cy="75" r="8" class="t1"/><text x="250" y="50" class="big">1990s</text><text x="250" y="102">LSTM</text><text x="250" y="118" class="xs muted">better memory</text>
+  <circle cx="420" cy="75" r="8" class="t2"/><text x="420" y="50" class="big">2013</text><text x="420" y="102">word2vec</text><text x="420" y="118" class="xs muted">learned embeddings</text>
+  <circle cx="590" cy="75" r="8" class="t3"/><text x="590" y="50" class="big">2014</text><text x="590" y="102">Attention</text><text x="590" y="118" class="xs muted">direct links</text>
+  <circle cx="750" cy="75" r="8" class="t3"/><text x="750" y="50" class="big">2017</text><text x="750" y="102">Transformer</text><text x="750" y="118" class="xs muted">attention only</text>
+  <circle cx="880" cy="75" r="8" class="t5"/><text x="868" y="50" class="big">2020s</text><text x="868" y="102">LLMs</text><text x="868" y="118" class="xs muted">scale: compute + data</text>
+ </g>
+</svg>
+<figcaption>Figure A2 – The ideas are old; what changed in the 2020s is compute and data (no internet or compute in the 80s/90s).</figcaption>
+</figure>
+<div class="callout"><b class="tag">Why this matters</b> Everything in the remaining eight lectures — LLMs, fine-tuning, RLHF, reasoning, RAG, evaluation — is built on this one block. If you understand $\mathrm{softmax}(QK^\top/\sqrt{d_k})V$ and why it exists, the rest is engineering and training recipes.</div>
+</section>
+
+<!-- =============================================================== B -->
+<section class="chapter" id="B">
+<h2><span class="letter">B</span> The exposition of the idea</h2>
+
+<!-- ---------------------------------------------------- B0 metrics -->
+<h3>B0 · First: how do we even measure an NLP model?</h3>
+<h4>Classification: the four possible outcomes</h4>
+<p>Take any yes/no task: <i>is this e-mail spam?</i>, <i>is this review toxic?</i>, <i>does this X-ray show a tumour?</i> One of the two answers is the <b>positive class</b> — by convention the thing you are looking for (spam, toxic, tumour); the other is the <b>negative class</b>. “Positive” does <i>not</i> mean “good”. For every example there are two separate facts: what is <b>actually true</b> (the label) and what the model <b>predicted</b>. Two facts with two values each give four outcomes. Each name has two words: the <b>second word is the model's prediction</b>, the <b>first word says whether that prediction was right</b>.</p>
+<div class="scroll-x"><table class="cm">
+ <tr><th></th><th>model says <b>positive</b> (“spam”)</th><th>model says <b>negative</b> (“not spam”)</th></tr>
+ <tr><th>really <b>positive</b><br>(it is spam)</th>
+  <td class="tp"><b>TP – true positive</b><br>Spam, flagged as spam. A correct catch.</td>
+  <td class="fn"><b>FN – false negative</b><br>Spam, but the filter said “fine”. A <i>miss</i> (statisticians: type II error).</td></tr>
+ <tr><th>really <b>negative</b><br>(it is a normal mail)</th>
+  <td class="fp"><b>FP – false positive</b><br>Normal mail, flagged as spam. A <i>false alarm</i> (type I error) – the invoice you needed lands in the junk folder.</td>
+  <td class="tn"><b>TN – true negative</b><br>Normal mail, delivered. Correctly left alone.</td></tr>
+</table></div>
+<p class="hint">Mnemonic: <b>T/F = was the model right?  P/N = what did the model say?</b> The four counts add up to the number of examples $N$; $TP+FN=P$ is the number of <i>actual</i> positives, $FP+TN$ the number of actual negatives.</p>
+
+<p><b>Accuracy</b> is the share of all predictions that are right — the diagonal of the table above:</p>
+$$\text{accuracy}=\frac{TP+TN}{TP+TN+FP+FN}=\frac{\text{correct predictions}}{\text{all predictions}}$$
+<p>Equivalent form that explains the trap. Let $\pi=P/N$ be the share of positives (the <i>prevalence</i>), $\text{recall}=TP/P$ and the <b>false-alarm rate</b> $\text{FAR}=FP/(FP+TN)$ (share of negatives wrongly flagged). Then</p>
+$$\text{accuracy}=\pi\cdot\text{recall}+(1-\pi)\cdot(1-\text{FAR})$$
+<p>If positives are rare ($\pi\to0$) accuracy is almost entirely $1-\text{FAR}$: it only measures how well you handle the <i>easy majority</i>. A model that never predicts “positive” has recall 0 and FAR 0, hence accuracy $=1-\pi$ — e.g. 99 % when 1 % of the mails are spam, while being useless.</p>
+
+<h4>Worked example: 10 000 e-mails, 100 of them spam (π = 1 %)</h4>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th>Model</th><th>TP</th><th>FN</th><th>FP</th><th>TN</th><th>accuracy</th><th>precision</th><th>recall</th><th>F1</th></tr>
+ <tr><td><b>Always “not spam”</b></td><td>0</td><td>100</td><td>0</td><td>9 900</td><td><b>99.0 %</b></td><td>0/0 → 0</td><td>0 %</td><td>0</td></tr>
+ <tr><td><b>A real filter</b> (finds 70 % of spam, wrongly flags 2 % of normal mail)</td><td>70</td><td>30</td><td>198</td><td>9 702</td><td><b>97.7 %</b></td><td>26.1 %</td><td>70 %</td><td>38.0 %</td></tr>
+</table></div>
+<p>Where the numbers come from: TP $=0.70\times100=70$; FN $=100-70=30$; FP $=0.02\times9\,900=198$; TN $=9\,900-198=9\,702$. Accuracy $=(70+9702)/10\,000=97.72\,\%$. The useless model has the <b>higher</b> accuracy — that is the <i>accuracy trap</i>. The widget below recomputes this table for any prevalence and any detector quality.</p>
+
+<h4>Precision, recall, F<sub>1</sub>: two different questions about the positive class</h4>
+$$\text{precision}=\frac{TP}{TP+FP},\qquad \text{recall}=\frac{TP}{TP+FN},\qquad F_1=\frac{2\,\text{precision}\cdot\text{recall}}{\text{precision}+\text{recall}}$$
+<ul>
+ <li><b>Precision</b> – look only at what the model <i>flagged</i> (TP+FP, the left column). “When it raises the alarm, how often is it right?” In the example 70/(70+198) = 26 %: three out of four alarms are false.</li>
+ <li><b>Recall</b> (sensitivity, hit rate) – look only at what is <i>really positive</i> (TP+FN, the top row). “Of all spam, how much did it find?” 70/100 = 70 %.</li>
+ <li>TN appears in <i>neither</i>: the pile of easy negatives cannot inflate them. That is why they expose what accuracy hides.</li>
+ <li><b>F<sub>1</sub></b> is the harmonic mean: it is dragged towards the smaller of the two (precision 1.0 and recall 0.0 give F<sub>1</sub> = 0, not the 0.5 an ordinary average would give), so you cannot buy a good score by maximising only one.</li>
+ <li>The two pull against each other: a stricter threshold means fewer false alarms (precision ↑) but more misses (recall ↓).</li>
+</ul>
+
+<h4>Generation: BLEU, ROUGE, perplexity</h4>
+<p>For generated text, <b>BLEU</b> and <b>ROUGE</b> compare the output against a reference text (expensive: someone must write the references). <b>Perplexity</b> needs only the model's own probabilities and measures how <i>surprised</i> the model is by a text: lower is better (BLEU/ROUGE: higher is better).</p>
+$$\mathrm{PPL}=\exp\Big(-\frac1N\sum_{i=1}^{N}\log p(w_i\mid w_{\lt i})\Big)$$
+<p>Reading the formula from the inside out:</p>
+<ul>
+ <li>$w_1,\dots,w_N$ is the text, split into $N$ tokens; $w_i$ is the <b>i-th token</b> (the one that actually appears).</li>
+ <li>$w_{\lt i}=(w_1,\dots,w_{i-1})$ is the <b>prefix</b>: everything that comes <i>before</i> position $i$. For $i=1$ it is empty (or just <code>&lt;bos&gt;</code>).</li>
+ <li>$p(w_i\mid w_{\lt i})$ is <b>the probability the model gave to the true token $w_i$</b>, having read only the prefix. Operationally: feed the prefix, take the model's softmax distribution over the whole vocabulary for the next position, and read off the entry belonging to the token that really came next. All other entries are ignored.</li>
+ <li>$\log p(\cdot)$ is the natural log: $0$ if the model was certain and right ($p=1$), $-0.69$ for $p=\tfrac12$, $-4.6$ for $p=0.01$. It is always $\le0$.</li>
+ <li>The minus sign makes it positive: $-\log p$ is the <b>surprise</b> (in <i>nats</i>) of token $i$. Averaging over the $N$ positions gives the <b>average surprise per token</b>, i.e. the cross-entropy. This is the same quantity as the training loss $-\log\hat y_{\text{next}}$ of B2, averaged over a text.</li>
+ <li>$\exp(\cdot)$ turns “average nats per token” into a more intuitive number (use the same base for log and exp).</li>
+</ul>
+<p>Equivalently, by the chain rule $p(w_1\ldots w_N)=\prod_i p(w_i\mid w_{\lt i})$ is the probability the model assigns to the whole text, and $\mathrm{PPL}=p(w_1\ldots w_N)^{-1/N}$: the inverse geometric mean of the per-token probabilities.</p>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th>i</th><th>true token $w_i$</th><th>prefix $w_{\lt i}$</th><th>$p(w_i\mid w_{\lt i})$ (assumed)</th><th>$\log p$</th></tr>
+ <tr><td>1</td><td>the</td><td>⟨bos⟩</td><td>0.5</td><td>−0.693</td></tr>
+ <tr><td>2</td><td>cat</td><td>the</td><td>0.25</td><td>−1.386</td></tr>
+ <tr><td>3</td><td>sat</td><td>the cat</td><td>0.125</td><td>−2.079</td></tr>
+</table></div>
+<p>Average of $\log p$ $=-4.159/3=-1.386$, so $\mathrm{PPL}=e^{1.386}=4$ (check: $(0.5\cdot0.25\cdot0.125)^{-1/3}=64^{1/3}=4$). <b>Interpretation:</b> the model is as uncertain as if it had to pick uniformly among <b>4 equally likely words</b> at every step. Two anchors: a perfect model has $\mathrm{PPL}=1$; a model that guesses uniformly over a vocabulary of $V$ words has $\mathrm{PPL}=V$ (our mini model: $V=31$). Perplexities are comparable only for the <i>same tokenization and vocabulary</i>.</p>
+
+<div class="widget" id="w-metrics">
+ <div class="wtitle">The accuracy trap – every number disclosed</div>
+ <p class="hint"><b>Setup.</b> $N$ = 10 000 examples; you set the share of positives π with the first slider, so $P=\pi N$ positives and $N-P$ negatives. <b>“Always negative”</b> never predicts positive, so by construction TP = FP = 0 (recall 0, false-alarm rate 0). <b>“Detector”</b> is a <i>hypothetical</i> classifier whose behaviour is fully described by two numbers you control with the other sliders. The defaults (recall 70 %, false-alarm rate 2 %) are <b>illustrative assumptions, not measured or derived</b>; before they were hidden constants in the code, now they are inputs. Everything else is computed from them.</p>
+ <div class="row"><button id="m-maj" class="on">Always “negative”</button><button id="m-det">Detector</button></div>
+ <label class="ctrl">Share of positive examples π: <output id="m-p-out"></output></label>
+ <input type="range" id="m-p" min="0" max="100" value="20">
+ <div class="grid2"><div><label class="ctrl">Detector recall TP/P: <output id="m-rc-out"></output></label><input type="range" id="m-rc" min="0" max="100" value="70"></div>
+ <div><label class="ctrl">Detector false-alarm rate FP/(FP+TN): <output id="m-fpr-out"></output></label><input type="range" id="m-fpr" min="0" max="30" value="2"></div></div>
+ <div class="scroll-x" id="m-calc"></div>
+ <div class="metricgrid" id="m-grid"></div>
+ <div id="m-plot" class="plot" style="min-height:240px"></div>
+ <p class="hint" id="m-note"></p>
+</div>
+
+<!-- ---------------------------------------------------- B1 tokenization -->
+<h3>B1 · Step 1 – cut the text into tokens (tokenization)</h3>
+<p>A <b>token</b> is the unit of text the model sees. Three families:</p>
+<table>
+ <tr><th>Level</th><th>Pro</th><th>Con</th></tr>
+ <tr><td><b>Word</b></td><td>simple; short sequences</td><td><i>bear</i> and <i>bears</i> become unrelated entries; unseen words at inference are <b>OOV</b> (out of vocabulary) and mapped to a single <code>&lt;unk&gt;</code> token; huge vocabulary</td></tr>
+ <tr><td><b>Subword</b></td><td>shares roots (<i>bear</i> + <i>s</i>); few OOV; the de-facto standard</td><td>longer sequences than words — and cost grows with sequence length</td></tr>
+ <tr><td><b>Character</b></td><td>no OOV; robust to typos and casing</td><td>very long sequences (slow); one letter (“u”) carries almost no meaning</td></tr>
+</table>
+<div class="callout beyond"><b class="tag">2026 lecture</b> The most common subword method is <b>BPE (byte-pair encoding)</b>: start from single characters, repeatedly find the most frequent adjacent pair in the training text and merge it into a new token, until the vocabulary has the desired size. Tokens are thus <i>learned from data</i>; if the tokenizer is trained on a corpus that does not represent your language(s), sequences get longer and cost more.</div>
+
+<div class="widget" id="w-token">
+ <div class="wtitle">Tokenizer explorer</div>
+ <p class="hint">A BPE tokenizer trained by the mini model on a synthetic corpus (8 roots × 4 suffixes; six inflected forms such as <i>reading</i> were <b>held out</b>). Type words — the word-level vocabulary has never seen the held-out ones.</p>
+ <div class="row"><input type="text" id="tk-in" value="reading bears jumping the bear runer" style="flex:1;min-width:220px" aria-label="text to tokenize">
+ <button data-preset="reading bears jumping">held-out words</button><button data-preset="bear run read book">seen words</button><button data-preset="teddy bearing">unknown roots</button></div>
+ <h4>Word level</h4><div id="tk-word"></div>
+ <h4>Subword (BPE, <span id="tk-nmerge"></span> merges)</h4><div id="tk-bpe"></div>
+ <h4>Character level</h4><div id="tk-char"></div>
+ <div class="metricgrid" id="tk-stats"></div>
+ <p class="hint">Red = <code>&lt;unk&gt;</code>. “_” marks the end of a word. Characters never seen in training simply stay single characters.</p>
+</div>
+
+<!-- ---------------------------------------------------- B2 embeddings -->
+<h3>B2 · Step 2 – give each token a meaningful vector</h3>
+<p>The simplest vector is <b>one-hot</b>: a vector with a single 1 (vocabulary size $V$ entries). To compare two token vectors the standard measure is the <b>cosine similarity</b> – the cosine of the angle between them:</p>
+$$\cos(\mathbf a,\mathbf b)=\frac{\mathbf a\cdot\mathbf b}{\lVert\mathbf a\rVert\,\lVert\mathbf b\rVert}\in[-1,1]$$
+<p>Same direction → 1, orthogonal → 0, opposite → −1. Problem: any two different one-hot vectors are orthogonal, so <i>teddy bear</i> is as unrelated to <i>soft</i> as to <i>book</i>. We want similar meanings to give high cosine.</p>
+<div class="widget" id="w-cos">
+ <div class="wtitle">Cosine similarity in 2-D</div>
+ <p class="hint">Rotate the two vectors. The two one-hot vectors of a 2-word vocabulary sit at 0° and 90°.</p>
+ <div class="grid2"><div><label class="ctrl">Angle of a: <output id="c-a-out"></output>°</label><input type="range" id="c-a" min="-180" max="180" value="20"></div>
+ <div><label class="ctrl">Angle of b: <output id="c-b-out"></output>°</label><input type="range" id="c-b" min="-180" max="180" value="70"></div></div>
+ <div class="row"><button id="c-onehot">one-hot (0° and 90°)</button><button id="c-same">same direction</button><button id="c-opp">opposite</button></div>
+ <div id="c-plot" class="plot" style="min-height:280px"></div>
+ <div class="callout" id="c-read"></div>
+</div>
+
+<h4>Learning embeddings with a proxy task (word2vec)</h4>
+<p>Idea: don't design the vectors, <b>learn</b> them. Pick a <i>proxy task</i> whose answer we can read from raw text — predict the next word (or, in word2vec: predict a word from its neighbours = <i>continuous bag-of-words</i>; predict the neighbours from a word = <i>skip-gram</i>). A model that predicts well must have captured how language works; the hidden layer it builds is the embedding. Nobody cares about the task itself, only about the vectors it leaves behind.</p>
+<figure class="figure">
+<svg viewBox="0 0 900 270" role="img" aria-label="Proxy-task network">
+ <g class="sm">
+  <text x="90" y="22" text-anchor="middle" class="big">one-hot input</text><text x="90" y="38" text-anchor="middle" class="xs muted">size V (tens of thousands)</text>
+  <text x="450" y="22" text-anchor="middle" class="big">hidden = embedding</text><text x="450" y="38" text-anchor="middle" class="xs muted">size D (hundreds; 2 in our mini model)</text>
+  <text x="810" y="22" text-anchor="middle" class="big">softmax output</text><text x="810" y="38" text-anchor="middle" class="xs muted">P(next word), size V</text>
+ </g>
+ <g>
+  <circle cx="90" cy="70" r="13" class="box"/><circle cx="90" cy="110" r="13" class="box"/><circle cx="90" cy="150" r="13" style="fill:var(--c1)"/><circle cx="90" cy="190" r="13" class="box"/><circle cx="90" cy="230" r="13" class="box"/>
+  <text x="120" y="154" class="sm">"cute" = 0 0 1 0 0</text>
+  <circle cx="450" cy="130" r="20" style="fill:var(--c3)"/><circle cx="450" cy="190" r="20" style="fill:var(--c3)"/>
+  <circle cx="810" cy="70" r="13" class="box"/><circle cx="810" cy="110" r="13" class="box"/><circle cx="810" cy="150" r="13" class="box"/><circle cx="810" cy="190" r="13" style="fill:var(--c2)"/><circle cx="810" cy="230" r="13" class="box"/>
+  <text x="680" y="194" class="sm" text-anchor="end">target: "teddy"</text>
+ </g>
+ <g style="stroke:var(--line);stroke-width:1"><path d="M103 150L430 130M103 150L430 190M103 70L430 130M103 230L430 190M103 110L430 190"/><path d="M470 130L797 70M470 130L797 190M470 130L797 230M470 190L797 110M470 190L797 150M470 190L797 190"/></g>
+ <text x="270" y="250" text-anchor="middle" class="sm">W₁ (V×D) · row i = embedding of token i</text>
+ <text x="630" y="250" text-anchor="middle" class="sm">W₂ (D×V) → softmax → cross-entropy</text>
+</svg>
+<figcaption>Figure B1 – The proxy-task network. After training, multiplying a one-hot vector by $W_1$ simply <i>selects a row</i>: that row is the word's embedding.</figcaption>
+</figure>
+<p>Formally, for the current token with one-hot $\mathbf x$:</p>
+$$\mathbf h=\mathbf x W_1+\mathbf b_1\in\mathbb R^{D},\qquad \hat{\mathbf y}=\mathrm{softmax}(\mathbf h W_2+\mathbf b_2)\in\mathbb R^{V},\qquad \mathcal L=-\log \hat y_{\text{next}}$$
+<p>and gradient descent (backpropagation) updates $W_1,W_2$ to make the true next word more probable. Training stops when the proxy loss stops improving (“converged”) — but the real goal is useful vectors, which depends on the downstream task. Typical $D$: hundreds to thousands (e.g. 768); a bigger $D$ is richer but makes everything after it more expensive.</p>
+
+<h4>Reading the loss $\mathcal L=-\log\hat y_{\text{next}}$</h4>
+<p>The network's last layer is a <b>softmax</b>: it turns $V$ raw scores into $V$ probabilities $\hat{\mathbf y}=(\hat y_1,\dots,\hat y_V)$ that are positive and sum to 1. $\hat y_j$ is “how likely the model thinks word $j$ is to come next”. Training pairs say which word <i>did</i> come next; call its index <i>next</i>. Then</p>
+<ul>
+ <li>$\hat y_{\text{next}}$ is simply <b>the probability the model gave to the correct word</b> (one entry of the vector; the other $V-1$ entries are ignored by the loss, although softmax couples them: raising one lowers the rest).</li>
+ <li>$-\log\hat y_{\text{next}}$ is the <b>surprise</b> at the truth. It is the general cross-entropy $-\sum_j y_j\log\hat y_j$ with the target $\mathbf y$ being one-hot ($y_{\text{next}}=1$, all other $y_j=0$): every term but one vanishes.</li>
+ <li>Averaged over all training pairs this is the quantity gradient descent minimises; $\exp$ of it is the perplexity of B0.</li>
+</ul>
+<table class="tbl-small">
+ <tr><th>probability given to the true word $\hat y_{\text{next}}$</th><td>1</td><td>0.5</td><td>0.1</td><td>1/31 (uniform guess)</td><td>0.01</td><td>→ 0</td></tr>
+ <tr><th>loss $-\ln\hat y_{\text{next}}$</th><td>0</td><td>0.69</td><td>2.30</td><td>3.43</td><td>4.61</td><td>→ ∞</td></tr>
+</table>
+<p>Why this shape? Being confidently wrong is punished much harder than being unsure. Why is it convenient? With softmax the gradient of the loss with respect to the raw scores is just $\hat{\mathbf y}-\mathbf y$ (predicted minus target): the true word's score is pushed up in proportion to how far its probability is from 1, every other word's score down in proportion to its probability. The hand-written backpropagation in <code>toolkit.py</code> starts from exactly that line (<code>dZ = (probs - T) / N</code>). A numeric example from the trained mini model is in <a href="#w-dash">the results dashboard</a> (chapter E).</p>
+
+<h4>word2vec in a bit more detail</h4>
+<p>The idea behind all of this is the <b>distributional hypothesis</b>: <i>a word is characterised by the company it keeps</i> (Firth, 1957). Words used in similar contexts (<i>cute</i>, <i>fluffy</i>, <i>soft</i>) end up with similar vectors, and raw text provides the training labels for free (self-supervision). <b>word2vec</b> (Mikolov et al., Google, 2013) made this fast enough to train on billions of words, in two variants. Example sentence “a cute <b>teddy</b> bear is”, window of 2 words on each side:</p>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th></th><th>CBOW (continuous bag of words)</th><th>skip-gram</th></tr>
+ <tr><td>input</td><td>the context words (their vectors are averaged – order is lost)</td><td>the centre word</td></tr>
+ <tr><td>to predict</td><td>the centre word</td><td>each context word</td></tr>
+ <tr><td>our example</td><td>{a, cute, bear, is} → <i>teddy</i></td><td><i>teddy</i> → a, <i>teddy</i> → cute, <i>teddy</i> → bear, <i>teddy</i> → is</td></tr>
+ <tr><td>character</td><td>fast, smooths over frequent words</td><td>more training pairs per sentence, better for rare words</td></tr>
+</table></div>
+<p>Our mini model uses the simplest possible version of the same recipe: input = current word, target = the <i>next</i> word (a window of one, to the right). It is the one-hidden-layer ancestor of a language model (compare Bengio et al., 2003). The network has <b>two</b> matrices: $W_1$ ($V\times D$, one “input” vector per word) and $W_2$ ($D\times V$, one “output” vector per word). word2vec practice is to keep $W_1$ (some people average the two).</p>
+<div class="callout beyond"><b class="tag">Beyond the lecture</b> (1) A softmax over $V=100\,000$ words at every training step is expensive, so word2vec replaces it by <b>negative sampling</b>: instead of “which of $V$ words comes next?” it asks a yes/no question, “is this (word, neighbour) pair real or did I draw the neighbour at random?”, using the true pair plus ~5–20 random wrong ones. The embeddings that come out are similar. (2) The learned space has a surprising linear structure: $\text{vec}(\text{king})-\text{vec}(\text{man})+\text{vec}(\text{woman})$ lands near $\text{vec}(\text{queen})$ – approximately and for hand-picked examples, but it shows that directions in the space can encode relations. (3) Related methods: GloVe (2014, factorises co-occurrence counts), fastText (2016, adds subword pieces, so unseen words get vectors).</div>
+
+<h4>“Dropping” the proxy task</h4>
+<p>Nobody wants a next-word predictor from this network; we want the <b>by-product</b>. After training we <b>throw away</b> $W_2$, the softmax and the loss – they were scaffolding – and keep only the lookup table $W_1$: token $i$ ↦ row $i$. The task is called a <i>proxy</i> because it stands in for the real goal “vectors that are useful for later tasks (sentiment, search, translation…)”. That is why a low proxy loss is only a means: we judge embeddings by how they behave afterwards (neighbours make sense, same-topic cosine high, downstream accuracy), not by the loss alone. The same pattern – <i>pretrain on a free task, reuse the representation</i> – recurs throughout the course (masked-word prediction in BERT, next-token prediction in GPT). In modern LLMs there is no separate step any more: the embedding table is one more set of weights inside the big network, trained jointly with all layers on next-token prediction, and the “proxy” is the model's own training objective.</p>
+
+<div class="widget" id="w-emb">
+ <div class="wtitle">Embeddings learned by the mini model</div>
+ <p class="hint">A toy language: 4 hidden topics (soft toys, books, water, money), function words (<i>a, the, is, and</i>) that occur everywhere, and the ambiguous word <b>bank</b> that occurs in both the water and the money topics. A <b>2-D</b> network was trained on 22 k (current word → next word) pairs. Hover the points; pick a word to see its nearest neighbours.</p>
+ <div class="row"><button id="e-view-sc" class="on">Embedding space</button><button id="e-view-cos">Cosine matrix: learned</button><button id="e-view-oh">Cosine matrix: one-hot</button>
+  <select id="e-word" aria-label="word"></select></div>
+ <div id="e-plot" class="plot" style="min-height:380px"></div>
+ <div class="legend" id="e-legend"></div>
+ <div class="callout" id="e-read"></div>
+</div>
+<div class="callout warn"><b class="tag">Limitation (lecture)</b> These vectors are <b>token-specific</b>: <i>bank</i> gets <b>one</b> vector whatever the sentence, and word order is ignored (averaging word vectors loses it). In the plot above, <i>bank</i> sits in between the water and money groups — a blur of both senses. Fixing this needs vectors that depend on the context → RNNs, then attention.</div>
+
+<!-- ---------------------------------------------------- B3 RNN -->
+<h3>B3 · Step 3 – make vectors depend on context: RNNs and why they fail</h3>
+<p>A <b>recurrent neural network</b> (RNN, 1980s) reads tokens one at a time and carries a <b>hidden state</b> $\mathbf h_t$ (also called activation or context vector) – a summary of the sentence so far:</p>
+$$\mathbf h_t=\tanh\!\big(W\mathbf h_{t-1}+U\mathbf x_t+\mathbf b\big)$$
+<p>Order now matters, and the last hidden state can feed a classifier (sentiment) or a decoder (translation). <b>LSTM</b> (1990s) adds a second track, the <i>cell state</i> $\mathbf c_t$, to keep what is “important to remember”. Three limitations remain:</p>
+<ol>
+ <li><b>Long-range dependencies / vanishing gradient.</b> The meaning of the whole sentence is squeezed into one hidden state. Backpropagating from the last word to word $t$ multiplies one Jacobian per step: $\partial\mathbf h_T/\partial\mathbf h_t=\prod_{k=t+1}^{T}\partial\mathbf h_k/\partial\mathbf h_{k-1}$. A product of many numbers below 1 goes to 0 (vanishing); above 1 it blows up (exploding).</li>
+ <li><b>Slow.</b> To get $\mathbf h_T$ you must compute all earlier states – no parallelism across positions.</li>
+ <li>It's a bottleneck: everything must pass through one vector.</li>
+</ol>
+<figure class="figure">
+<svg viewBox="0 0 900 250" role="img" aria-label="Unrolled RNN with a direct attention link">
+ <g class="sm" text-anchor="middle">
+  <rect x="60" y="100" width="110" height="52" rx="10" class="box"/><text x="115" y="132" class="big">RNN cell</text>
+  <rect x="260" y="100" width="110" height="52" rx="10" class="box"/><text x="315" y="132" class="big">RNN cell</text>
+  <rect x="460" y="100" width="110" height="52" rx="10" class="box"/><text x="515" y="132" class="big">RNN cell</text>
+  <rect x="660" y="100" width="110" height="52" rx="10" class="box"/><text x="715" y="132" class="big">RNN cell</text>
+  <text x="115" y="210">a</text><text x="315" y="210">cute</text><text x="515" y="210">teddy bear</text><text x="715" y="210">is reading</text>
+  <text x="215" y="90" class="xs muted">h₁</text><text x="415" y="90" class="xs muted">h₂</text><text x="615" y="90" class="xs muted">h₃</text><text x="34" y="116" class="xs muted">h₀</text>
+ </g>
+ <path class="arrow" d="M30 126H58"/><path class="arrow" d="M170 126H258"/><path class="arrow" d="M370 126H458"/><path class="arrow" d="M570 126H658"/>
+ <path class="arrow" d="M115 195V154"/><path class="arrow" d="M315 195V154"/><path class="arrow" d="M515 195V154"/><path class="arrow" d="M715 195V154"/>
+ <path d="M715 98C715 30 515 30 515 98" fill="none" stroke="var(--c3)" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+ <text x="615" y="22" text-anchor="middle" class="sm t3" style="font-weight:700">attention: a direct link, 1 step instead of many</text>
+</svg>
+<figcaption>Figure B2 – In an RNN information from “a” reaches the last step through every cell in between (solid). Attention adds direct links (dashed green).</figcaption>
+</figure>
+
+<h4>What is ρ, and how does it relate to the Jacobian?</h4>
+<p>Yes – ρ is a knob on the <b>Jacobian</b> of the chain rule above. In the simple RNN, $\mathbf h_k=\tanh(\mathbf z_k)$ with $\mathbf z_k=W\mathbf h_{k-1}+U\mathbf x_k+\mathbf b$. The Jacobian of one step (the matrix of all partial derivatives $\partial h_{k,a}/\partial h_{k-1,b}$) is, by the chain rule,</p>
+$$J_k=\frac{\partial\mathbf h_k}{\partial\mathbf h_{k-1}}=\underbrace{\operatorname{diag}\!\big(1-\mathbf h_k^{2}\big)}_{D_k:\ \tanh'\text{ at each unit, entries in }(0,1]}\;\cdot\;W$$
+<p>and the sensitivity of the last state to a state $m$ steps back is the product of $m$ such matrices:</p>
+$$\frac{\partial\mathbf h_T}{\partial\mathbf h_{T-m}}=J_T\,J_{T-1}\cdots J_{T-m+1},\qquad \Big\lVert\frac{\partial\mathbf h_T}{\partial\mathbf h_{T-m}}\Big\rVert\;\le\;\prod_{k}\lVert D_k\rVert\,\lVert W\rVert\;\le\;\rho^{\,m}\quad(\text{if }\lVert W\rVert=\rho).$$
+<ul>
+ <li><b>The norm used</b> is the <i>spectral norm</i> of a matrix: the largest factor by which it can stretch a vector. $\lVert\partial\mathbf h_T/\partial\mathbf h_{T-m}\rVert$ answers: “if I nudge the state $m$ steps ago by a unit, how much can the final state move?” That is exactly the “gradient norm” on the plot's vertical axis, and the “distance in tokens” on the horizontal axis is $m$.</li>
+ <li><b>ρ</b> is the scale of the recurrent matrix: in <code>torch_model.gradient_decay</code> $W=\rho\,Q$ with $Q$ a random <i>orthogonal</i> matrix (a rotation/reflection: it preserves length). So <b>every</b> singular value of $W$ equals ρ: $W$ shrinks every vector by exactly ρ if ρ&lt;1, stretches it by ρ if ρ&gt;1, keeps its length if ρ=1. In a real RNN $W$ is not so tidy, and ρ stands for “typical size of its largest singular value”.</li>
+ <li>The bound $\rho^m$ is the <b>grey dashed line</b>. It ignores $D_k$ (set to 1); the real factors $D_k$ are ≤ 1 (equal 1 only when a unit is exactly 0), so the measured curves lie <i>below</i> the dashed line. This is why ρ=1.0 still decays, and why ρ=1.2 does not explode in the plot: tanh saturation clamps it. With no saturating non-linearity, ρ&gt;1 would give $\rho^m$ growth: <b>exploding</b> gradients (cured in practice by gradient clipping).</li>
+ <li>Backpropagation through time multiplies the loss gradient by exactly these Jacobians, $\partial\mathcal L/\partial\mathbf h_t=\partial\mathcal L/\partial\mathbf h_T\cdot J_T\cdots J_{t+1}$, so a word $m$ steps back contributes a learning signal of size ≲ $\rho^m$ – effectively nothing for $m=20$, ρ=0.8 ($0.8^{20}\approx0.01$, and the measured value is far smaller).</li>
+</ul>
+
+<div class="widget" id="w-grad">
+ <div class="wtitle">Vanishing gradient, measured</div>
+ <p class="hint">Vertical axis: $\lVert\partial\mathbf h_T/\partial\mathbf h_{T-m}\rVert$, how strongly the last state depends on the state $m$ = “distance” tokens earlier (a product of $m$ Jacobians; log scale). Coloured lines are <b>exact</b> measurements from the mini model for a 16-D tanh RNN with $W=\rho Q$ ($Q$ orthogonal) and ρ = 0.8, 1.0, 1.2; the green line is one attention layer. The grey dashed line is the idealised bound $\rho^{m}$ for the ρ you choose with the slider (it ignores the tanh derivative, so real curves lie below it).</p>
+ <label class="ctrl">ρ = scale of the recurrent matrix $W$ (every singular value of $W$ equals ρ): <output id="g-rho-out"></output></label>
+ <input type="range" id="g-rho" min="50" max="130" value="85">
+ <div id="g-plot" class="plot" style="min-height:340px"></div>
+ <div class="callout" id="g-read"></div>
+</div>
+<p>Take-away: with the RNN, “what happened 20 words ago” has an influence of ≈10⁻⁶ or less on the gradient; through attention the influence stays of order 10⁻²–1 whatever the distance – there is a path of length 1.</p>
+
+<!-- ---------------------------------------------------- B4 attention -->
+<h3>B4 · Step 4 – attention: look directly at what you need</h3>
+<p>Attention (2014) first appeared in translation: when producing the next French word, the decoder takes a peek at the relevant part of the input instead of relying on one hidden state. The Transformer (2017, <i>Attention Is All You Need</i>) drops the recurrence entirely: <b>self-attention</b> computes the representation of every token as a function of <i>all</i> the tokens, via direct links, in parallel.</p>
+
+<h4>First, what exactly gets embedded? From “a vector per word” to “a vector per word <i>in its context</i>”</h4>
+<p>After B2 every token type owns <b>one</b> row of an embedding table: wherever <i>bank</i> appears, the lookup returns the identical vector. Self-attention keeps the table but adds a second stage that rebuilds each token's vector <i>from its neighbours</i>:</p>
+$$\underbrace{\mathbf x_i}_{\text{lookup (same every time)}}\ \longrightarrow\ \underbrace{\mathbf z_i=\sum_{j}a_{ij}\,\mathbf v_j}_{\text{a blend of all tokens' vectors, weights } a_{ij}\text{ depend on this sentence}}$$
+<p>Tiny illustration (invented 2-D numbers). Let the stored vectors be $\mathbf v_{\text{bank}}=(1,0)$, $\mathbf v_{\text{river}}=(0,1)$, $\mathbf v_{\text{cash}}=(0,-1)$, and suppose “bank” gives weight ½ to itself and ½ to its clue word:</p>
+<table class="tbl-small">
+ <tr><th>sentence</th><th>input vector of <i>bank</i></th><th>new vector $\mathbf z_{\text{bank}}$</th></tr>
+ <tr><td>“the river bank”</td><td>(1, 0)</td><td>½·(1,0) + ½·(0,1) = <b>(0.5, +0.5)</b></td></tr>
+ <tr><td>“robbing a cash bank”</td><td>(1, 0)</td><td>½·(1,0) + ½·(0,−1) = <b>(0.5, −0.5)</b></td></tr>
+</table>
+<p>Same input, different outputs, because the weights $a_{ij}$ differ. So you are right that something bigger than a single token is encoded: the output at a position is a vector for <b>“this token as used in this sentence”</b>, a summary of the token plus the part of its context that matters for it. Consequently a word no longer corresponds to <i>one point</i> in the embedding space but to a <b>cloud of points, one per occurrence</b>; the shape of the cloud is the word's range of senses.</p>
+<p><b>How to visualise it.</b> Run many sentences containing <i>bank</i> through the network, collect the output vector at the <i>bank</i> position each time ($d$ numbers), project them to 2-D with <b>PCA</b> (or t-SNE / UMAP in practice), and draw one dot per occurrence, coloured by the sense. A static embedding would give a single dot; a contextual one gives two separated clusters (river vs money). The “<i>bank</i>” widget further down is exactly this plot, from a small trained Transformer; it also marks the dot of the sentence you select. (In deep models this contextualisation builds up layer by layer: probing studies find that upper layers separate word senses best.)</p>
+
+<h4>Query, key, value</h4>
+<p>Think of a <b>soft dictionary lookup</b>. A Python <code>dict</code> compares your query with each key, finds the one exact match and returns its value. Attention does the same but <i>softly</i>: it compares the query with <b>every</b> key, turns the match scores into weights that sum to 1, and returns the <b>weighted blend of all the values</b>. To make this learnable, each token's embedding row $\mathbf x$ (a row of $X$) plays three roles and gets a separate learned projection for each (the sizes $n,d,d_k,d_v$ are defined in the box below the figure):</p>
+$$Q=XW_Q,\qquad K=XW_K,\qquad V=XW_V$$
+<ul>
+ <li><b>query</b> – “what am I looking for?” (e.g. for <i>teddy bear</i>);</li>
+ <li><b>key</b> – “what do I offer?”: compared with the query to decide <i>how similar</i> they are;</li>
+ <li><b>value</b> – “what I give you if you attend to me”: the vector that is actually averaged.</li>
+</ul>
+<p>The comparison is a dot product, normalised into weights by a softmax, which then weight the values:</p>
+$$\boxed{\;\mathrm{Attention}(Q,K,V)=\mathrm{softmax}\!\Big(\frac{QK^{\top}}{\sqrt{d_k}}\Big)V\;}$$
+<figure class="figure">
+<svg viewBox="0 0 900 250" role="img" aria-label="Matrix shapes of self-attention">
+ <g class="sm" text-anchor="middle">
+  <rect x="20" y="60" width="50" height="120" class="acc"/><text x="45" y="125" class="big">X</text><text x="45" y="200" class="xs muted">n × d</text>
+  <text x="95" y="125" class="big">→</text>
+  <rect x="120" y="60" width="40" height="120" style="fill:var(--c1);opacity:.75"/><text x="140" y="125" class="big wh">Q</text><text x="140" y="200" class="xs muted">n × d_k</text>
+  <rect x="190" y="60" width="40" height="120" style="fill:var(--c2);opacity:.75"/><text x="210" y="125" class="big wh">K</text><text x="210" y="200" class="xs muted">n × d_k</text>
+  <rect x="260" y="60" width="40" height="120" style="fill:var(--c3);opacity:.75"/><text x="280" y="125" class="big wh">V</text><text x="280" y="200" class="xs muted">n × d_v</text>
+  <text x="335" y="125" class="big">⟹</text>
+  <rect x="370" y="60" width="120" height="120" class="box"/><text x="430" y="115" class="big">Q Kᵀ</text><text x="430" y="135" class="xs">scores, n × n</text><text x="430" y="200" class="xs muted">row i = query i vs every key</text>
+  <text x="520" y="125" class="big">→</text><text x="520" y="143" class="xs">÷√d_k</text>
+  <rect x="550" y="60" width="100" height="120" style="fill:var(--accent-soft);stroke:var(--accent)"/><text x="600" y="108" class="big">softmax</text><text x="600" y="128" class="xs">rows sum to 1</text><text x="600" y="148" class="xs">(weights A)</text>
+  <text x="680" y="125" class="big">×V</text>
+  <rect x="720" y="60" width="40" height="120" style="fill:var(--c5);opacity:.75"/><text x="740" y="125" class="big wh">Z</text><text x="740" y="200" class="xs muted">n × d_v</text>
+  <text x="825" y="105" class="xs">row i of Z = weighted</text><text x="825" y="120" class="xs">average of the values,</text><text x="825" y="135" class="xs">weights from query i</text>
+ </g>
+</svg>
+<figcaption>Figure B3 – Shapes. Everything is a matrix product, which is why GPUs love it. The $n\times n$ score matrix is also why cost grows with sequence length (hence the tokenization trade-off).</figcaption>
+</figure>
+
+<h4>Dimensions: what are n, d, d<sub>k</sub>, d<sub>v</sub>, V …?</h4>
+<p>Most confusion about attention is shape confusion, so fix the symbols first. In this report each <b>row is one token</b> (the lecture slides draw the transpose). Careful with letters: the <i>italic capital</i> $V$ in “$V=XW_V$” is the <b>value matrix</b>, while “vocabulary size” is written $V$ in the table below and in the text of B2 – context tells them apart, and the vocabulary size never occurs in an attention formula.</p>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th>symbol</th><th>meaning</th><th>mini model</th><th>original Transformer (2017)</th><th>modern LLM, order of magnitude</th></tr>
+ <tr><td>$V$</td><td><b>vocabulary size</b>: number of distinct tokens</td><td>31</td><td>≈ 37 000 (shared BPE)</td><td>30 000 – 250 000</td></tr>
+ <tr><td>$n$</td><td><b>sequence length</b>: tokens in <i>this</i> input (counts tokens, not words)</td><td>6</td><td>a sentence</td><td>up to the context window: 10³ – 10⁶</td></tr>
+ <tr><td>$d$ ($d_{\text{model}}$)</td><td><b>model width</b>: length of each token vector as it flows through the network</td><td>2 (16 in the sense task)</td><td>512</td><td>768 – 12 000</td></tr>
+ <tr><td>$h$</td><td>number of attention heads</td><td>1 (2)</td><td>8</td><td>8 – 128</td></tr>
+ <tr><td>$d_k$</td><td>length of query and key vectors (must be equal: they are dotted)</td><td>2</td><td>64 $=d/h$</td><td>64 – 128</td></tr>
+ <tr><td>$d_v$</td><td>length of value vectors (may differ from $d_k$; usually equal)</td><td>2</td><td>64 $=d/h$</td><td>64 – 128</td></tr>
+ <tr><td>$d_{ff}$</td><td>hidden width of the feed-forward net</td><td>–</td><td>2048 ($=4d$)</td><td>≈ 4$d$</td></tr>
+ <tr><td>$N$</td><td>number of stacked blocks (layers)</td><td>1</td><td>6</td><td>12 – 120</td></tr>
+</table></div>
+<p><b>Matrix shapes</b> (single head):</p>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th>object</th><th>shape</th><th>what it holds</th></tr>
+ <tr><td>embedding table</td><td>$V\times d$</td><td>one learned row per vocabulary entry (looked up by token id)</td></tr>
+ <tr><td>$X$</td><td>$n\times d$</td><td>the embeddings of <i>these</i> $n$ tokens (+ positions): one row per token</td></tr>
+ <tr><td>$W_Q,\ W_K$</td><td>$d\times d_k$</td><td>learned projections (the same for every token and every sentence)</td></tr>
+ <tr><td>$W_V$</td><td>$d\times d_v$</td><td>learned projection</td></tr>
+ <tr><td>$Q=XW_Q,\ K=XW_K$</td><td>$n\times d_k$</td><td>row $i$ = query / key of token $i$</td></tr>
+ <tr><td>$V=XW_V$</td><td>$n\times d_v$</td><td>row $j$ = value of token $j$</td></tr>
+ <tr><td>$S=QK^\top/\sqrt{d_k}$, $A=\mathrm{softmax}(S)$</td><td>$n\times n$</td><td>entry $(i,j)$ = how much token $i$ looks at token $j$; each row of $A$ sums to 1</td></tr>
+ <tr><td>$Z=AV$</td><td>$n\times d_v$</td><td>row $i$ = new vector of token $i$</td></tr>
+ <tr><td>$W_O$ (after $h$ heads)</td><td>$(h\,d_v)\times d$</td><td>mixes the concatenated heads back to width $d$</td></tr>
+ <tr><td>output layer (decoder end)</td><td>$d\times V$</td><td>logits $n\times V$, then softmax over the vocabulary</td></tr>
+</table></div>
+<p><b>Rules to keep in mind</b></p>
+<ul>
+ <li>$Q$ and $K$ must have the <b>same</b> width $d_k$ (their dot product needs matching lengths); $V$'s width $d_v$ is free, and the output has $d_v$ columns. The conventional choice is $d_k=d_v=d/h$, so that $h$ heads concatenated again have width $d$.</li>
+ <li><b>$V$ (vocabulary) never appears inside attention.</b> It only sets the size of the embedding table and of the final output layer. Attention sees only $n$ and $d$.</li>
+ <li><b>$n$ (sequence length)</b> appears in the number of <i>rows</i> of every activation, and quadratically in the score matrix $n\times n$: doubling the input length quadruples the attention cost and memory ($\approx n^2 d$ multiply-adds, $n^2$ scores per head). No <i>learned weight</i> has a dimension $n$, so the same weights process any length (limited in practice by what was trained, and by the position encoding).</li>
+ <li><b>$d$ (width)</b> sets the number of parameters: one attention layer has $W_Q,W_K,W_V,W_O$ = $4d^2$ weights (when $hd_k=d$); the feed-forward net has $2\,d\,d_{ff}\approx8d^2$.</li>
+ <li><b>Worked shapes, mini model:</b> $X$ is $6\times2$, $W_Q$ is $2\times2$, $Q$ is $6\times2$, scores $6\times6$ (36 numbers), $Z$ is $6\times2$. <b>BERT-base-sized layer</b> ($n=512$, $d=768$, $h=12$, $d_k=64$): $X$ is $512\times768$; per head $W_Q$ is $768\times64$, $Q$ is $512\times64$, scores $512\times512\approx262\,000$ numbers; 12 heads give 12 such score matrices.</li>
+</ul>
+
+<div class="widget" id="w-attn">
+ <div class="wtitle">Self-attention explorer (live, in your browser)</div>
+ <p class="hint">Single head, $n=6$ tokens, $d=d_k=d_v=2$: the 2-D embeddings of the mini model and fixed random $2\times2$ matrices $W_Q,W_K,W_V$ exported from NumPy. Pick a query token (its row is outlined), toggle <b>positions</b> and the <b>causal mask</b> (explained below the widget), and shuffle the words. The code recomputes softmax(QKᵀ/√d)V in JavaScript and checks it against the Python result.</p>
+ <div class="row"><span>Query token:</span><span id="a-tokbtns" class="row"></span></div>
+ <div class="row" style="margin-top:8px"><button id="a-pe">+ positions: off</button><button id="a-mask">causal mask: off</button><button id="a-shuf">⇄ shuffle words</button><button id="a-reset">reset order</button></div>
+ <div class="grid2"><div id="a-heat" class="plot" style="min-height:330px"></div><div id="a-qk" class="plot" style="min-height:330px"></div></div>
+ <div id="a-read" class="callout"></div>
+</div>
+<h4>How to read the explorer</h4>
+<p><b>The two plots.</b> <i>Left:</i> the weight matrix $A$. Row = the token that is <b>looking</b> (query), column = the token being <b>looked at</b> (key); the colour of cell $(i,j)$ is $a_{ij}$ and every row sums to 1. <i>Right:</i> the geometry behind one row. The arrow is the selected token's query; each disc is a token's key, with area growing with its weight. A key pointing in about the same direction as the query (and long) has a large dot product, hence a big disc.</p>
+<div class="grid2">
+<div class="card"><div class="cardtitle">“+ positions”: off / ON</div>
+ <p><b>Off:</b> the input to attention is just the token embeddings, $X=E$. Each token's vector depends only on <i>which word</i> it is, not <i>where</i> it stands.</p>
+ <p><b>ON:</b> the sinusoidal position vector of each slot (B5c) is <b>added</b>: $X=E+PE$. Now “teddy” in slot 3 and “teddy” in slot 5 have different vectors, so their queries and keys, and hence all the weights, change.</p>
+ <p><b>Why it is critical:</b> attention scores are computed from content only, so with positions off the layer sees a <i>set</i>, not a sequence. Try it: shuffle the words with positions off – every token's output is unchanged (it merely moves with its word). With positions ON the outputs change after shuffling: the layer can now tell the orders apart.</p></div>
+<div class="card"><div class="cardtitle">“causal mask”: off / ON</div>
+ <p><b>Off:</b> every token may look at every token, left <i>and</i> right (this is what the encoder does, e.g. to understand a source sentence).</p>
+ <p><b>ON:</b> before the softmax every score with $j>i$ (a token to the <i>right</i>) is replaced by $-\infty$:</p>
+ $$A=\mathrm{softmax}\Big(\tfrac{QK^\top}{\sqrt{d_k}}+M\Big),\quad M_{ij}=\begin{cases}0&j\le i\\-\infty&j>i\end{cases}$$
+ <p>$e^{-\infty}=0$, so those weights are exactly 0 (upper triangle of the heatmap turns white) and each row is renormalised over the allowed part: row 1 (“a”) can only look at itself, weight 1.00; the last row still sees everyone.</p>
+ <p><b>Why it is critical:</b> a text generator must predict token $i+1$ from tokens $\le i$. If training let position $i$ see the future it would just copy the answer. The mask lets one pass train all positions at once without cheating, and matches generation time, when later tokens do not yet exist. This is the “masked self-attention” of the decoder in B6.</p></div>
+</div>
+<p><b>Guided tour (2 minutes).</b> (1) Everything off, query “bear”: which tokens get big discs? (2) Press “shuffle words”: the row for “bear” shows the same weights on the same words, just in another order, and the output vector is identical – <b>permutation-equivariant</b> (permuting the input permutes the output the same way; the layer has no idea of order). (3) Switch positions ON and shuffle again: outputs now differ (look at the “largest change” in the text below the plots). (4) Switch the causal mask ON: upper triangle vanishes; select “a” and see weight 1.00 on itself. (5) The green ✓ line confirms that the JavaScript equals the NumPy result for the three un-shuffled settings (plain, positions, positions+mask).</p>
+<p>Take-away: with positions off, shuffling the words changes <i>nothing</i> for each token's output (the layer treats its input as a set – <b>permutation-equivariant</b>). That is why the Transformer needs position information (B5), and why the causal mask (B6) is a deliberate choice.</p>
+
+<div class="widget" id="w-sense">
+ <div class="wtitle">Context-dependent vectors: the word “bank”, from a trained mini Transformer</div>
+ <p class="hint"><b>Setup.</b> A one-block Transformer ($d=16$, 2 heads) was trained on synthetic 8-token sentences containing one <code>bank</code>, 1–2 <b>clue words</b> (river/lake/fish/boat = river sense; cash/coin/loan/price = money sense) and filler tokens f1…f5. <b>Left:</b> each dot is the output vector at the <code>bank</code> position for one of 400 test sentences, projected from 16 to 2 dimensions by PCA; the colour is the true sense. A static embedding would put <i>all</i> 400 dots on a single point. The ◆ marks the sentence you select below. <b>Right:</b> the attention matrix of that sentence; the outlined row is <code>bank</code>'s.</p>
+ <p class="hint"><b>Why four examples, and why #1 and #3 look alike:</b> the buttons are four different test sentences. #1 and #3 are <i>both</i> river-sense sentences (different clue words and different positions of <code>bank</code>), #2 and #4 are money-sense. Click through them: the ◆ for #1 and #3 lands in the <b>same cluster</b> – that is the point: the same sense gives nearby vectors even though the surrounding words differ, whereas #1 and #2 land far apart although the word <code>bank</code> is identical.</p>
+ <div class="row"><span>Example sentence:</span><span id="s-btns" class="row"></span></div>
+ <div class="grid2"><div id="s-pca" class="plot" style="min-height:330px"></div><div id="s-att" class="plot" style="min-height:330px"></div></div>
+ <div id="s-read" class="callout"></div>
+</div>
+
+<!-- ---------------------------------------------------- B5 details -->
+<h3>B5 · Step 5 – three details that make attention work</h3>
+<h4>(a) Why divide by $\sqrt{d_k}$?</h4>
+<p><b>In plain words.</b> The score of a query–key pair is a sum of $d_k$ products. The more terms you add up, the more the sum can wander away from zero, so scores get <i>bigger in size</i> as $d_k$ grows – for no good reason. Big scores make the softmax almost one-hot (“winner takes all”), and a one-hot softmax has almost zero gradient, so learning stalls. Dividing by $\sqrt{d_k}$ cancels exactly that growth.</p>
+<p><b>The argument.</b> Assume (as at the start of training) that the entries of $\mathbf q$ and $\mathbf k$ are independent, with mean 0 and variance 1. The score is $\mathbf q\cdot\mathbf k=\sum_{m=1}^{d_k}q_mk_m$.</p>
+<ol>
+ <li>Each term has mean $\mathbb E[q_mk_m]=\mathbb E[q_m]\,\mathbb E[k_m]=0$ (independence).</li>
+ <li>Each term has variance $\operatorname{Var}(q_mk_m)=\mathbb E[q_m^2k_m^2]-0=\mathbb E[q_m^2]\,\mathbb E[k_m^2]=1\cdot1=1$.</li>
+ <li>The $d_k$ terms are independent, and variances of independent variables <b>add</b>: $\operatorname{Var}(\mathbf q\cdot\mathbf k)=d_k$. Hence the standard deviation is $\sqrt{d_k}$ (not $d_k$: the spread grows like a random walk, with the square root of the number of steps).</li>
+ <li>Multiplying a variable by a constant $c$ multiplies its variance by $c^2$, so $\operatorname{Var}\!\big(\mathbf q\cdot\mathbf k/\sqrt{d_k}\big)=d_k/d_k=1$: the scaled scores have unit spread whatever $d_k$ is.</li>
+</ol>
+<p><b>Why a large spread hurts.</b> Softmax weights are $a_j\propto e^{s_j}$; a gap of 8 between scores (typical at $d_k=64$ unscaled, where the std is 8) means a factor $e^8\approx3000$, so one key takes ≈ 100 % of the weight. And the softmax derivative $\partial a_i/\partial s_j=a_i(\delta_{ij}-a_j)$ is ≈ 0 whenever the $a$'s are (nearly) one-hot, so gradients vanish. Equivalently, $\sqrt{d_k}$ is a fixed <i>temperature</i>. The assumption (independent unit-variance entries) holds only roughly and only at initialisation, but it explains why the fix is needed; the widget checks it empirically (<i>std of q·k</i> in its read-out).</p>
+<div class="widget" id="w-scale">
+ <div class="wtitle">Softmax saturation vs head dimension</div>
+ <label class="ctrl">Key/query dimension d<sub>k</sub>: <output id="sc-out"></output></label><input type="range" id="sc-dk" min="0" max="10" value="5">
+ <div class="row"><button id="sc-new">↻ draw new random q and keys</button></div>
+ <div class="grid2"><div id="sc-bars" class="plot" style="min-height:260px"></div><div id="sc-curve" class="plot" style="min-height:260px"></div></div>
+ <div class="callout" id="sc-read"></div>
+</div>
+
+<h4>(b) Multiple heads</h4>
+<p><b>Why more than one?</b> One attention computes <i>one</i> softmax per token, hence one weighted average, one “view” of the sentence. But a token usually has to attend to several different things at once for different reasons: <i>bear</i> may need its adjective (<i>cute</i>), its verb (<i>reading</i>) and the previous token, each carrying a different kind of information. Averaging all of that with one set of weights blurs it. The fix: run $h$ independent attentions (<b>heads</b>) side by side, each with its <b>own</b> learned $W_Q^{(i)},W_K^{(i)},W_V^{(i)}$, so each can specialise in a different pattern (like several filters in a convolution).</p>
+$$\mathrm{head}_i=\mathrm{Attention}(XW_Q^{(i)},XW_K^{(i)},XW_V^{(i)}),\qquad \mathrm{MHA}(X)=\mathrm{concat}(\mathrm{head}_1,\dots,\mathrm{head}_h)\,W_O$$
+<p><b>Nothing forces the heads to differ</b>: they start from different random initialisations and each is free to reduce the same loss, so gradient descent tends to push them to different jobs. In trained models some heads indeed look at the previous token, some at syntactic partners, some at rare keywords; many turn out redundant (pruning studies, e.g. Michel et al. 2019, remove many heads with little loss).</p>
+<p><b>Shapes and cost.</b> With the usual $d_k=d_v=d/h$ each head works in a <i>smaller</i> space, so $h$ heads cost about the same as one full-width head:</p>
+<div class="scroll-x"><table class="tbl-small">
+ <tr><th>stage</th><th>shape</th><th>example: original paper, $d=512$, $h=8$</th></tr>
+ <tr><td>input $X$</td><td>$n\times d$</td><td>$n\times512$</td></tr>
+ <tr><td>per head: $Q^{(i)},K^{(i)},V^{(i)}$ ($W^{(i)}$ is $d\times d/h$)</td><td>$n\times d/h$</td><td>$n\times64$, eight times</td></tr>
+ <tr><td>per head: scores / weights</td><td>$n\times n$</td><td>eight different $n\times n$ matrices</td></tr>
+ <tr><td>per head: output $\mathrm{head}_i$</td><td>$n\times d/h$</td><td>$n\times64$</td></tr>
+ <tr><td>concatenate along columns</td><td>$n\times d$</td><td>$n\times(8\cdot64)=n\times512$</td></tr>
+ <tr><td>times $W_O$ ($d\times d$)</td><td>$n\times d$</td><td>$n\times512$, same shape as the input, so blocks stack</td></tr>
+</table></div>
+<p><b>Role of $W_O$.</b> Concatenation just places the $h$ results side by side; $W_O$ is the learned matrix that <i>mixes</i> them so that information from different heads can combine in each output coordinate. <b>Toy case:</b> with $d=16$ and $h=2$ (the sense Transformer above) each head has $d_k=8$; the 2-D mini model of the explorer has $h=1$ (with $d=2$ a second head would have only 1 dimension). In code the $h$ heads are computed at once by reshaping $XW_Q$ from $n\times d$ to $h\times n\times d/h$.</p>
+
+<h4>(c) Position encodings</h4>
+<p>Attention has no sense of order, so a vector encoding the position is <b>added</b> (not concatenated: the width stays $d$) to each token embedding: $X=E+PE$. The original paper uses sines and cosines of different frequencies:</p>
+$$PE_{(pos,2i)}=\sin\!\Big(\frac{pos}{10000^{2i/d}}\Big),\qquad PE_{(pos,2i+1)}=\cos\!\Big(\frac{pos}{10000^{2i/d}}\Big)$$
+<p><b>Reading the formula.</b> $pos=0,1,\dots,n-1$ is the position of the token in the sequence. The $d$ coordinates are grouped in $d/2$ <b>pairs</b>, indexed by $i=0,\dots,d/2-1$; pair $i$ is $(\sin\theta,\cos\theta)$ with angle $\theta=\omega_i\cdot pos$ and <b>frequency</b> $\omega_i=10000^{-2i/d}$.</p>
+<ul>
+ <li><b>A different clock speed per pair.</b> For $i=0$, $\omega_0=1$: the angle advances 1 radian per position, a full cycle every $2\pi\approx6.3$ positions (the fastest “second hand”). As $i$ grows, $\omega_i$ shrinks geometrically down to $\approx1/10000$ for the last pair, whose wavelength is $2\pi\cdot10000\approx63\,000$ positions (the slowest “hour hand”). The constant 10000 sets how slow the slowest clock is, i.e. which lengths can still be told apart.</li>
+ <li><b>Like the digits of a counter.</b> The last digit of a number changes at every step, the next one every 10 steps, and so on; together the digits identify the number uniquely. Likewise the pairs, fast to slow, jointly give each position a unique fingerprint.</li>
+ <li><b>Why a sine <i>and</i> a cosine?</b> A pair is a point on a circle. Moving $k$ positions further rotates it by the fixed angle $\omega_ik$, whatever the starting position: $PE_{pos+k}=R(\omega_1k,\omega_2k,\dots)\,PE_{pos}$ with $R$ a block-diagonal rotation. So <b>“k tokens later” is a linear function of the encoding</b>, which makes relative offsets easy for the $W_Q,W_K$ to read off. It also means nearby positions have similar encodings (second plot below).</li>
+ <li>No parameters are learned and nothing depends on the sequence length: the encoding of position 5 is the same in a 10-token and a 1000-token input.</li>
+</ul>
+<div class="widget" id="w-pe">
+ <div class="wtitle">Sinusoidal position encoding</div>
+ <div class="grid2"><div><label class="ctrl">Positions n: <output id="pe-n-out"></output></label><input type="range" id="pe-n" min="4" max="64" value="24"></div>
+ <div><label class="ctrl">Dimension d: <output id="pe-d-out"></output></label><input type="range" id="pe-d" min="4" max="64" step="2" value="32"></div></div>
+ <div class="grid2"><div id="pe-plot" class="plot" style="min-height:300px"></div><div id="pe-sim" class="plot" style="min-height:300px"></div></div>
+ <div class="callout" id="pe-read"></div>
+ <p class="hint"><b>Left:</b> the matrix $PE$ ($n$ rows = positions, $d$ columns; red/blue = value $+1$/$-1$). <b>Right:</b> cosine similarity between the encodings of two positions: bright diagonal = identical; similarity falls as positions get further apart (the oblique ripples are the fast frequencies), but it stays well above 0 here because the slow columns are nearly the same for all of these positions.</p>
+</div>
+<p><b>Trends to look for when you move the sliders.</b></p>
+<ul>
+ <li><b>Along the columns (left → right):</b> stripes get wider. The leftmost columns alternate within a few rows (fast), the right-hand ones change slowly and for short sequences are almost constant from top to bottom (sine ≈ 0, cosine ≈ 1: the angle has barely moved; this is the grey/red column pattern on the right of the heatmap). Those slow columns carry no information at $n\le64$; they matter for long contexts.</li>
+ <li><b>Increase $n$</b> (more positions): rows are added at the bottom; the rows already there do <i>not</i> change (the code is independent of $n$). Fast columns show more oscillations, and once you go beyond the slower wavelengths the slow columns start to change as well. The similarity matrix grows a longer diagonal band; far-away positions stay different.</li>
+ <li><b>Increase $d$</b> (wider vectors): more columns, and the frequencies $10000^{-2i/d}$ are sampled more finely between the same two limits (1 and 1/10000): the leftmost column is always the fastest, the pattern in the leftmost columns is the same, but you get more pairs in between. More slow-to-fast “digits” means a finer, more unique fingerprint and a sharper similarity peak; at $d=4$ (only two frequencies) different positions can look alike (look at the off-diagonal ripples of the similarity plot).</li>
+ <li><b>Magnitude:</b> every entry is in $[-1,1]$, so the encoding has fixed norm $\sqrt{d/2}$, small compared with how large embeddings can become, which is one reason implementations scale the embeddings.</li>
+</ul>
+<div class="callout beyond"><b class="tag">Beyond the lecture</b> The sinusoid is only one design. <b>Learned absolute</b> position embeddings (a trainable table of $n_{\max}\times d$; BERT, GPT-2) work equally well in-range but cannot go beyond the trained length. <b>Relative</b> schemes put the offset $j-i$ directly in the score (Shaw et al. 2018; the learned bias of T5). <b>Rotary embeddings (RoPE)</b>, used in Llama-type models, rotate $\mathbf q$ and $\mathbf k$ by position-dependent angles using the very same frequency set, so that $\mathbf q_i\cdot\mathbf k_j$ depends on $j-i$ only. <b>ALiBi</b> subtracts a penalty proportional to distance from the scores. Long-context models mostly use RoPE variants.</div>
+
+<div class="widget" id="w-order">
+ <div class="wtitle">Does it matter? The word-order experiment</div>
+ <p class="hint">Synthetic task: 8 tokens contain exactly one <code>X</code> and one <code>Y</code> among fillers; label = “X comes before Y”. Same tokens in both classes – only order differs. Test accuracy of four models from the mini model:</p>
+ <div id="o-plot" class="plot" style="min-height:250px"></div>
+ <div class="callout" id="o-read"></div>
+</div>
+
+<!-- ---------------------------------------------------- B6 Transformer -->
+<h3>B6 · Step 6 – the Transformer, assembled</h3>
+<p>The original model is built for translation: an <b>encoder</b> (left) turns the source sentence into context-aware embeddings; a <b>decoder</b> (right) produces the target sentence one token at a time. Both are stacks of $N$ identical blocks (the original paper used $N=6$).</p>
+<figure class="figure">
+<div class="scroll-x">
+<svg viewBox="0 0 960 800" role="img" aria-label="Transformer encoder-decoder architecture with tensor shapes" style="min-width:760px">
+ <g class="sm" text-anchor="middle">
+  <text x="250" y="22" class="big">ENCODER</text><text x="250" y="38" class="xs muted">reads the whole source at once (bidirectional)</text>
+  <text x="710" y="22" class="big">DECODER</text><text x="710" y="38" class="xs muted">writes the target one token at a time</text>
+ </g>
+ <!-- ============ ENCODER ============ -->
+ <rect x="60" y="305" width="380" height="315" rx="14" fill="none" stroke="var(--line)" stroke-dasharray="6 4"/>
+ <text x="72" y="323" class="xs muted">block × N  (N = 6 in the paper; each block has its own weights)</text>
+ <g class="sm" text-anchor="middle">
+  <text x="250" y="758">“a cute teddy bear is reading”</text><text x="250" y="774" class="xs muted">n source tokens (token ids)</text>
+  <rect x="100" y="650" width="300" height="46" rx="9" class="box"/><text x="250" y="670" class="big">Embedding + position encoding</text><text x="250" y="686" class="xs">table V×d, then add PE (n×d)</text>
+  <rect x="100" y="520" width="300" height="60" rx="9" class="acc"/><text x="250" y="542" class="big">Multi-head self-attention</text><text x="250" y="558" class="xs">Q, K, V all computed from the same X</text><text x="250" y="572" class="xs">h heads → concat → W_O ; scores n×n per head</text>
+  <rect x="100" y="470" width="300" height="30" rx="9" class="box"/><text x="250" y="490">Add (residual) &amp; layer norm</text>
+  <rect x="100" y="390" width="300" height="56" rx="9" style="fill:var(--surface2);stroke:var(--c4)"/><text x="250" y="412" class="big">Feed-forward network</text><text x="250" y="428" class="xs">applied to every token separately:</text><text x="250" y="440" class="xs">n×d → n×d_ff (wider) → n×d</text>
+  <rect x="100" y="340" width="300" height="30" rx="9" class="box"/><text x="250" y="360">Add (residual) &amp; layer norm</text>
+  <text x="250" y="270" class="big">H : n × d</text><text x="250" y="286" class="xs">context-aware vector of each source token (“memory”)</text>
+ </g>
+ <g class="xs muted"><text x="262" y="632">X : n × d</text><text x="262" y="514">n × d</text><text x="262" y="464">n × d</text><text x="262" y="384">n × d</text></g>
+ <path class="arrow" d="M250 648V582"/><path class="arrow" d="M250 518V502"/><path class="arrow" d="M250 468V448"/><path class="arrow" d="M250 388V372"/><path class="arrow" d="M250 338V292"/>
+ <path class="arrow" d="M250 758V698"/>
+ <!-- residual (skip) connections -->
+ <path d="M250 610H418V485H402" fill="none" stroke="var(--c4)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+ <path d="M250 452H418V355H402" fill="none" stroke="var(--c4)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+ <text x="426" y="545" class="xs" style="fill:var(--c4)" transform="rotate(-90 426 545)" text-anchor="middle">skip connection</text>
+ <!-- ============ DECODER ============ -->
+ <rect x="520" y="225" width="380" height="395" rx="14" fill="none" stroke="var(--line)" stroke-dasharray="6 4"/>
+ <text x="532" y="243" class="xs muted">block × N</text>
+ <g class="sm" text-anchor="middle">
+  <text x="710" y="758">⟨bos⟩ un mignon ours en peluche …</text><text x="710" y="774" class="xs muted">m target tokens so far, shifted right</text>
+  <rect x="560" y="650" width="300" height="46" rx="9" class="box"/><text x="710" y="670" class="big">Embedding + position encoding</text><text x="710" y="686" class="xs">m×d</text>
+  <rect x="560" y="530" width="300" height="56" rx="9" class="acc"/><text x="710" y="551" class="big">Masked multi-head self-attention</text><text x="710" y="567" class="xs">Q, K, V from the decoder input · scores m×m</text><text x="710" y="579" class="xs">position i sees only positions ≤ i</text>
+  <rect x="560" y="488" width="300" height="28" rx="9" class="box"/><text x="710" y="507">Add &amp; layer norm</text>
+  <rect x="560" y="400" width="300" height="66" rx="9" style="fill:var(--accent-soft);stroke:var(--c3);stroke-width:2"/><text x="710" y="421" class="big">Cross-attention</text><text x="710" y="437" class="xs">Q from the decoder (m×d_k)</text><text x="710" y="450" class="xs">K, V from the encoder H (n×d_k, n×d_v)</text><text x="710" y="462" class="xs">scores m×n: which source tokens matter now?</text>
+  <rect x="560" y="358" width="300" height="28" rx="9" class="box"/><text x="710" y="377">Add &amp; layer norm</text>
+  <rect x="560" y="290" width="300" height="50" rx="9" style="fill:var(--surface2);stroke:var(--c4)"/><text x="710" y="312" class="big">Feed-forward network</text><text x="710" y="328" class="xs">m×d → m×d_ff → m×d</text>
+  <rect x="560" y="250" width="300" height="28" rx="9" class="box"/><text x="710" y="269">Add &amp; layer norm</text>
+  <rect x="560" y="140" width="300" height="56" rx="9" class="box"/><text x="710" y="161" class="big">Linear (d → V) + softmax</text><text x="710" y="177" class="xs">m×V probabilities over the vocabulary;</text><text x="710" y="189" class="xs">the last row gives the next token</text>
+  <text x="710" y="92" class="big">P(next token)</text><text x="710" y="108" class="xs">e.g. “est” 0.6 · “lit” 0.2 · … (sums to 1)</text>
+ </g>
+ <g class="xs muted"><text x="722" y="632">m × d</text><text x="722" y="524">m × d</text></g>
+ <path class="arrow" d="M710 648V588"/><path class="arrow" d="M710 528V518"/><path class="arrow" d="M710 486V468"/><path class="arrow" d="M710 398V388"/><path class="arrow" d="M710 356V342"/><path class="arrow" d="M710 288V280"/><path class="arrow" d="M710 248V198"/><path class="arrow" d="M710 138V118"/>
+ <path class="arrow" d="M710 758V698"/>
+ <path d="M710 610H878V502H862" fill="none" stroke="var(--c4)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+ <path d="M710 474H878V372H862" fill="none" stroke="var(--c4)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+ <path d="M710 346H878V264H862" fill="none" stroke="var(--c4)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+ <!-- encoder → cross-attention -->
+ <path d="M250 300H478V433H558" fill="none" stroke="var(--c3)" stroke-width="2.6" marker-end="url(#ah)"/>
+ <text x="470" y="370" class="xs" style="fill:var(--c3);font-weight:700" transform="rotate(-90 470 370)" text-anchor="middle">H becomes the keys &amp; values</text>
+ <!-- numbers -->
+ <circle cx="84" cy="673" r="9" fill="var(--text)"/><text x="84" y="677" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">1</text><circle cx="84" cy="550" r="9" fill="var(--text)"/><text x="84" y="554" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">2</text><circle cx="84" cy="485" r="9" fill="var(--text)"/><text x="84" y="489" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">3</text><circle cx="84" cy="418" r="9" fill="var(--text)"/><text x="84" y="422" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">4</text><circle cx="84" cy="355" r="9" fill="var(--text)"/><text x="84" y="359" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">5</text><circle cx="544" cy="673" r="9" fill="var(--text)"/><text x="544" y="677" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">1</text><circle cx="544" cy="558" r="9" fill="var(--text)"/><text x="544" y="562" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">2</text><circle cx="544" cy="502" r="9" fill="var(--text)"/><text x="544" y="506" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">3</text><circle cx="544" cy="433" r="9" fill="var(--text)"/><text x="544" y="437" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">4</text><circle cx="544" cy="372" r="9" fill="var(--text)"/><text x="544" y="376" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">5</text><circle cx="544" cy="315" r="9" fill="var(--text)"/><text x="544" y="319" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">6</text><circle cx="544" cy="264" r="9" fill="var(--text)"/><text x="544" y="268" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">7</text><circle cx="544" cy="168" r="9" fill="var(--text)"/><text x="544" y="172" text-anchor="middle" class="xs" style="fill:var(--surface);font-weight:700">8</text>
+</svg>
+</div>
+<figcaption>Figure B4 – Encoder–decoder Transformer with tensor shapes ($n$ source tokens, $m$ target tokens so far, $d$ model width, $d_{ff}$ feed-forward width, $V$ vocabulary). <b>Reading order is bottom → top.</b> Encoder: ① look up token embeddings and add positions; ② multi-head self-attention (every source token looks at every other); ③ add the block's input back (dashed <i>skip connection</i>) and layer-normalise; ④ feed-forward network, applied to each token on its own; ⑤ another add &amp; norm. Repeat the block $N$ times; the result $H$ ($n\times d$) is the context-aware version of the source. Decoder: ① embed the target prefix; ② <i>masked</i> self-attention (no peeking at the future); ③ add &amp; norm; ④ <b>cross-attention</b>, the only place where the two halves meet: queries from the decoder, keys and values from $H$; ⑤ add &amp; norm; ⑥ feed-forward; ⑦ add &amp; norm; after $N$ blocks ⑧ a linear layer to $V$ scores and a softmax. Blue = attention, orange = feed-forward, green arrow = encoder→decoder. Three uses of attention in all: (1) encoder self-attention, (2) masked decoder self-attention, (3) cross-attention. Skip connections and layer normalisation (2026 lecture) help deep stacks to train: each sub-layer only has to learn a <i>correction</i> to its input.</figcaption>
+</figure>
+<div class="callout"><b class="tag">Quiz in the lecture</b> In the cross-attention arrow(s), which of Q, K, V comes from the decoder? <button data-reveal="r-q" data-show="Show answer" data-hide="Hide answer">Show answer</button><div class="reveal-body" id="r-q"><b>The query.</b> The decoder asks “which words of the input matter for what I'm about to say?”; the keys and values come from the encoder, i.e. from the input sequence.</div></div>
+<p><b>Generating.</b> Start with <code>&lt;bos&gt;</code>; the decoder outputs a distribution over the vocabulary; take the next token, append it, feed the sequence back in, and repeat until <code>&lt;eos&gt;</code> is generated. <b>Masked</b> means position $i$ may only attend to positions $\le i$ – at generation time later tokens do not exist yet. In practice the mask adds $-\infty$ to forbidden scores before the softmax.</p>
+
+<h4>Label smoothing – a training trick from the paper</h4>
+<p>After “What a great …” many words are valid (day, lecture, book). Training with a hard one-hot target says “100 % this word, 0 % all others”. <b>Label smoothing</b> keeps $1-\varepsilon$ on the true word and spreads $\varepsilon$ over the others, so the model is told it may be wrong:</p>
+$$y_k=1-\varepsilon,\qquad y_{j\ne k}=\frac{\varepsilon}{V-1}$$
+<div class="widget" id="w-ls">
+ <div class="wtitle">Label smoothing</div>
+ <label class="ctrl">ε = <output id="ls-out"></output></label><input type="range" id="ls-eps" min="0" max="50" value="10">
+ <div id="ls-plot" class="plot" style="min-height:230px"></div>
+ <div class="callout" id="ls-read"></div>
+</div>
+
+<!-- ---------------------------------------------------- B7 walkthrough -->
+<h3>B7 · The whole thing end to end: “a cute teddy bear is reading”</h3>
+<div class="widget" id="w-walk">
+ <div class="wtitle">Step-by-step walkthrough</div>
+ <div class="step-nav"><button id="wk-prev">◀ Prev</button><button id="wk-next" class="primary">Next ▶</button><span id="wk-count" class="hint"></span></div>
+ <div class="stepbox card" id="wk-box"></div>
+</div>
+</section>
+
+<!-- =============================================================== C -->
+<section class="chapter" id="C">
+<h2><span class="letter">C</span> Practical aspects of the idea</h2>
+
+<div class="grid2">
+<div class="card"><div class="cardtitle">Choosing a tokenizer and vocabulary</div>
+<ul>
+ <li>Single language: a <b>subword</b> tokenizer is the usual choice – it exploits word roots with a lower OOV risk than word level.</li>
+ <li>Vocabulary size: <b>tens of thousands</b> for one language; <b>hundreds of thousands</b> for multilingual and code models.</li>
+ <li>Always reserve an <code>&lt;unk&gt;</code> slot for out-of-vocabulary tokens, and <code>&lt;bos&gt;</code>/<code>&lt;eos&gt;</code> to mark start and end of sequences.</li>
+ <li>Train the tokenizer on text that looks like your use case (<i>2026</i>): a mismatch lengthens sequences and raises cost.</li>
+ <li>Why sequence length matters: compute grows with the number of tokens – subword and especially character-level tokenizers pay for it.</li>
+</ul></div>
+<div class="card"><div class="cardtitle">Choosing sizes</div>
+<ul>
+ <li>Embedding / hidden size $D$ (or $d_\text{model}$): hundreds to thousands (e.g. 768). Trade-off: task complexity versus latency and cost; choose empirically and copy what others found to work.</li>
+ <li>In the Transformer the feed-forward hidden layer is <b>wider</b> than its input/output (unlike word2vec's bottleneck) to give the model degrees of freedom.</li>
+ <li>Number of heads $h$ and stacked blocks $N$ are hyper-parameters; the original used $N=6$.</li>
+ <li>Hidden size also sets the cost of everything downstream.</li>
+</ul></div>
+</div>
+
+<div class="card"><div class="cardtitle">Training and decoding practice</div>
+<ul>
+ <li><b>Proxy tasks</b>: watch the loss versus epochs and stop when it plateaus, but remember the loss is not the real goal: judge embeddings on the downstream task.</li>
+ <li><b>Metrics by task</b>: use precision/recall/F1 (not accuracy) on imbalanced classes; per-token or per-entity-type metrics for NER; BLEU/ROUGE need reference texts which are costly, perplexity does not (the lecture previews LLM-based, reference-free evaluation for later).</li>
+ <li><b>Parallelism</b>: unlike RNNs, all positions of a sequence are processed at once with matrix products – a perfect fit for GPUs.</li>
+ <li><b>Generation</b> is sequential: one token per decoder pass until <code>&lt;eos&gt;</code>.</li>
+ <li><b>Label smoothing</b> (ε≈0.1 in the original) improved BLEU on translation; it is a general technique.</li>
+ <li><b>Heads</b> are not constrained to differ – they diverge because of what gradient descent finds useful.</li>
+ <li><b>Reading list</b>: the course book “Super Study Guide: Transformers &amp; LLMs” and the VIP cheat sheet (both mentioned in the lecture).</li>
+</ul></div>
+
+<div class="callout beyond"><b class="tag">Beyond the lecture</b> Rough sizes for the original base model ($d=512$, $d_{ff}=2048$, $h=8$): attention has $4d^2\approx1.05$ M parameters per block, the feed-forward network $2\,d\,d_{ff}\approx2.10$ M, so ≈3.2 M per block (before biases, embeddings and the cross-attention in decoder blocks). The score matrix $QK^\top$ has $n^2$ entries per head, so memory and time grow <i>quadratically</i> with sequence length – the real price of “every token looks at every token”.</div>
+
+<h3>Common pitfalls</h3>
+<table>
+ <tr><th>Pitfall</th><th>Why</th><th>What to do</th></tr>
+ <tr><td>Reporting accuracy on rare-event data</td><td>“always negative” scores 99 %</td><td>Report precision, recall and F1 (widget in B0)</td></tr>
+ <tr><td>Using static embeddings for polysemous words</td><td><i>bank</i> has one vector regardless of context</td><td>Contextual representations (attention)</td></tr>
+ <tr><td>Forgetting position information</td><td>self-attention is permutation-equivariant</td><td>Add position encodings (experiment in B5)</td></tr>
+ <tr><td>Skipping the 1/√d<sub>k</sub> scaling</td><td>softmax saturates, gradients vanish</td><td>Always scale (widget in B5)</td></tr>
+ <tr><td>Letting the decoder see the future</td><td>it would simply copy the answer in training</td><td>Causal mask in decoder self-attention</td></tr>
+ <tr><td>Tokenizer trained on the wrong language mix</td><td>longer sequences, more cost</td><td>Train it on data representative of target languages</td></tr>
+</table>
+</section>
+
+<!-- =============================================================== D -->
+<section class="chapter" id="D">
+<h2><span class="letter">D</span> The conclusions</h2>
+<div class="card"><div class="cardtitle">Take-aways</div>
+<ol>
+ <li>Text must become numbers: <b>tokenize</b> (word / subword / character) then <b>embed</b>. Subword (BPE) is the sweet spot.</li>
+ <li>One-hot vectors are orthogonal and carry no similarity; <b>learned embeddings</b> (word2vec: a proxy task like next-word or neighbours prediction) place related words close together.</li>
+ <li>Static embeddings ignore context and order. <b>RNNs/LSTMs</b> add order, but forget over long distances (vanishing gradients) and are sequential and slow.</li>
+ <li><b>Attention</b> gives every token a direct link to every other: $\mathrm{softmax}(QK^\top/\sqrt{d_k})V$, with learned $W_Q,W_K,W_V$; multiple heads learn different relations; <b>position encodings</b> restore order; the mask restricts the decoder to the past.</li>
+ <li>The <b>Transformer</b> stacks encoder blocks (self-attention + FFN) and decoder blocks (masked self-attention, cross-attention, FFN) with residuals and layer normalisation; generation runs until <code>&lt;eos&gt;</code>.</li>
+ <li>Evaluate with metrics that fit the task and data: F1 on imbalanced classes; BLEU/ROUGE with references; perplexity from the model's own probabilities.</li>
+</ol></div>
+<h3>Where this leads</h3>
+<p>Lecture 2 (2025) takes the original architecture apart (position embeddings in detail, attention variants) and shows how today's models relate to it; later lectures turn it into large language models, train and align them, give them reasoning, tools and evaluation.</p>
+<h3>What the mini model does <i>not</i> show</h3>
+<ul>
+ <li>All data is synthetic and tiny (vocabulary of 14–31, 2–16 dimensions). It illustrates mechanisms, not scale or real language.</li>
+ <li>The 2-D embedding space has little room: books, money and function words end up close together; the clean separation seen with larger $D$ in real models is not reproduced.</li>
+ <li>We built the encoder only (the decoder's cross-attention and mask are tested in NumPy, but no translation model is trained).</li>
+</ul>
+
+<h3>Self-check</h3>
+<div class="quiz card" id="quiz">
+ <p class="hint">Score: <b id="quiz-score">0 / 6 correct (0 answered)</b></p>
+ <div class="q"><b>1.</b> Why are one-hot vectors a poor token representation?
+  <div class="opts"><button>They are too long to store</button><button data-ok>Every pair of different tokens is orthogonal, so similarity carries no information</button><button>They cannot be fed to a neural network</button></div>
+  <div class="why">Cosine similarity between any two distinct one-hot vectors is 0; learned embeddings make similar words point in similar directions.</div></div>
+ <div class="q"><b>2.</b> What is a “proxy task” in word2vec?
+  <div class="opts"><button data-ok>A task we solve only to obtain useful word vectors as a by-product</button><button>A task that replaces tokenization</button><button>A lower-cost version of the final downstream task</button></div>
+  <div class="why">Predicting a word from its neighbours (CBOW) or neighbours from a word (skip-gram) forces the hidden layer to capture how words relate; the prediction itself is discarded.</div></div>
+ <div class="q"><b>3.</b> Why do RNNs struggle with long-range dependencies?
+  <div class="opts"><button>They have too few parameters</button><button data-ok>Backpropagation multiplies many Jacobians; products of factors &lt; 1 vanish, so distant words barely influence the update</button><button>They cannot use softmax</button></div>
+  <div class="why">See the gradient widget: ≈10⁻⁶ after 20 steps for ρ=0.8, while attention has a path of length 1.</div></div>
+ <div class="q"><b>4.</b> In self-attention, which matrix supplies the vectors that are actually averaged?
+  <div class="opts"><button>Queries</button><button>Keys</button><button data-ok>Values</button></div>
+  <div class="why">Queries and keys only determine the weights (via the scaled dot product and softmax); the output is the weighted sum of the values.</div></div>
+ <div class="q"><b>5.</b> You remove the position encoding from a Transformer encoder and mean-pool its outputs. On the “X before Y?” task you expect…
+  <div class="opts"><button>the same accuracy – attention knows the order anyway</button><button data-ok>chance level – the model sees a set of tokens, not a sequence</button><button>perfect accuracy – attention is more powerful than an RNN</button></div>
+  <div class="why">Measured in the mini model: ≈ 0.5 without positions, 1.0 with them.</div></div>
+ <div class="q"><b>6.</b> Why is the decoder's self-attention masked?
+  <div class="opts"><button>To reduce memory</button><button data-ok>Because at generation time tokens to the right do not exist yet, so training must not let a position use them</button><button>To make the heads different</button></div>
+  <div class="why">Position i may attend only to positions ≤ i; cross-attention to the encoder is unmasked because the whole source sentence is known.</div></div>
+</div>
+</section>
+
+<!-- =============================================================== E -->
+<section class="chapter" id="E">
+<h2><span class="letter">E</span> Key terms used in the lecture</h2>
+<input type="text" id="gloss-filter" placeholder="Filter terms…" style="width:100%;max-width:420px" aria-label="Filter terms">
+<div class="glossary" id="glossary">
+ <div class="term"><h4>Accuracy</h4><div>Fraction of predictions that are correct. Misleading with imbalanced classes.</div><div class="where">B0, C</div></div>
+ <div class="term"><h4>Activation / hidden state / context vector</h4><div>The vector an RNN keeps as a summary of the sequence so far; $\mathbf h_t$ (also $\mathbf a_t$).</div><div class="where">B3</div></div>
+ <div class="term"><h4>Attention</h4><div>Mechanism giving a position a direct, learned, weighted link to other positions (2014); core of the Transformer.</div><div class="where">B4</div></div>
+ <div class="term"><h4>BLEU (bilingual evaluation understudy)</h4><div>Reference-based translation metric; higher is better.</div><div class="where">A, B0</div></div>
+ <div class="term"><h4>BOS / EOS tokens</h4><div>Special tokens marking the start and end of a sequence; generation stops when EOS is produced.</div><div class="where">B6</div></div>
+ <div class="term"><h4>BPE (byte-pair encoding)</h4><div>Subword tokenizer that iteratively merges the most frequent adjacent pair (2026 lecture).</div><div class="where">B1</div></div>
+ <div class="term"><h4>Causal / masked attention</h4><div>Self-attention in which position $i$ may only see positions $\le i$.</div><div class="where">B6</div></div>
+ <div class="term"><h4>Cell state</h4><div>Extra memory track $\mathbf c_t$ of an LSTM, next to the hidden state.</div><div class="where">B3</div></div>
+ <div class="term"><h4>Cosine similarity</h4><div>$\cos\theta=\mathbf a\cdot\mathbf b/(\lVert\mathbf a\rVert\lVert\mathbf b\rVert)$; similarity of direction.</div><div class="where">B2</div></div>
+ <div class="term"><h4>Cross-attention</h4><div>Attention whose queries come from the decoder and keys/values from the encoder output.</div><div class="where">B6</div></div>
+ <div class="term"><h4>Cross-entropy</h4><div>Training loss $-\log$ of the probability given to the right word.</div><div class="where">B2</div></div>
+ <div class="term"><h4>CBOW (continuous bag of words)</h4><div>word2vec variant: predict a word from the words around it.</div><div class="where">B2</div></div>
+ <div class="term"><h4>Decoder</h4><div>Half of the Transformer that produces the output sequence token by token.</div><div class="where">B6</div></div>
+ <div class="term"><h4>Embedding</h4><div>Dense vector (size $D$, hundreds) representing a token; row of the embedding matrix.</div><div class="where">B2</div></div>
+ <div class="term"><h4>Encoder</h4><div>Half of the Transformer that turns the input tokens into context-aware vectors.</div><div class="where">B6</div></div>
+ <div class="term"><h4>F1 score</h4><div>Harmonic mean of precision and recall.</div><div class="where">B0</div></div>
+ <div class="term"><h4>Feed-forward network (FFN)</h4><div>Two-layer network applied to each position after attention, with a wider hidden layer.</div><div class="where">B6</div></div>
+ <div class="term"><h4>Head (attention head)</h4><div>One set of projections $W_Q,W_K,W_V$; multi-head attention uses $h$ of them in parallel and mixes them with $W_O$.</div><div class="where">B5</div></div>
+ <div class="term"><h4>Key / Query / Value (K, Q, V)</h4><div>Three learned projections of the input; query–key similarity gives the weights, applied to the values.</div><div class="where">B4</div></div>
+ <div class="term"><h4>Label smoothing</h4><div>Replace the one-hot target by $1-\varepsilon$ / $\varepsilon/(V-1)$ to make the model less over-confident.</div><div class="where">B6</div></div>
+ <div class="term"><h4>Layer normalization</h4><div>Normalises the activations of a layer; helps convergence (2026 lecture).</div><div class="where">B6</div></div>
+ <div class="term"><h4>LSTM (long short-term memory)</h4><div>RNN extension with a cell state to retain important information.</div><div class="where">B3</div></div>
+ <div class="term"><h4>Multi-classification</h4><div>One label for each token of the text (NER, POS tagging).</div><div class="where">A</div></div>
+ <div class="term"><h4>NER (named-entity recognition)</h4><div>Label words as location, time, person, …</div><div class="where">A</div></div>
+ <div class="term"><h4>NLP</h4><div>Natural language processing – computing with text.</div><div class="where">A</div></div>
+ <div class="term"><h4>One-hot encoding (OHE)</h4><div>Vector of length $V$ with a single 1 identifying the token.</div><div class="where">B2</div></div>
+ <div class="term"><h4>OOV (out of vocabulary)</h4><div>Token not seen at training time; mapped to <code>&lt;unk&gt;</code>.</div><div class="where">B1</div></div>
+ <div class="term"><h4>Perplexity</h4><div>$\exp$ of the average negative log-probability; how surprised the model is; lower is better.</div><div class="where">B0</div></div>
+ <div class="term"><h4>Position encoding / embedding</h4><div>Vector added to each token embedding to inform on position; sinusoidal in the original paper.</div><div class="where">B5</div></div>
+ <div class="term"><h4>Precision / Recall</h4><div>Correct share of the predicted positives / found share of the true positives.</div><div class="where">B0</div></div>
+ <div class="term"><h4>Proxy task</h4><div>Auxiliary task solved only to learn good representations.</div><div class="where">B2</div></div>
+ <div class="term"><h4>Residual connection</h4><div>Output = layer(x) + x; lets features pass directly and helps deep networks learn (2026 lecture).</div><div class="where">B6</div></div>
+ <div class="term"><h4>RNN (recurrent neural network)</h4><div>Reads tokens one by one, carrying a hidden state.</div><div class="where">B3</div></div>
+ <div class="term"><h4>ROUGE</h4><div>Suite of reference-based metrics (summarisation); higher is better.</div><div class="where">A</div></div>
+ <div class="term"><h4>Self-attention</h4><div>Attention among the tokens of the same sequence.</div><div class="where">B4</div></div>
+ <div class="term"><h4>Skip-gram</h4><div>word2vec variant: predict the surrounding words from a word.</div><div class="where">B2</div></div>
+ <div class="term"><h4>Softmax</h4><div>Turns scores into a probability distribution: $e^{z_i}/\sum_j e^{z_j}$.</div><div class="where">B2, B4</div></div>
+ <div class="term"><h4>Subword tokenization</h4><div>Splitting text into pieces between characters and words (e.g. bear + s).</div><div class="where">B1</div></div>
+ <div class="term"><h4>Token / Tokenization</h4><div>Unit of text seen by the model / the process of cutting text into them.</div><div class="where">B1</div></div>
+ <div class="term"><h4>Transformer</h4><div>Encoder–decoder architecture built on attention (2017, “Attention Is All You Need”).</div><div class="where">B6</div></div>
+ <div class="term"><h4>Vanishing / exploding gradient</h4><div>Product of many Jacobians going to 0 / ∞ during backpropagation through time.</div><div class="where">B3</div></div>
+ <div class="term"><h4>Word2vec</h4><div>2013 method learning embeddings with a proxy task (CBOW / skip-gram); “king − man + woman ≈ queen”.</div><div class="where">B2</div></div>
+</div>
+</section>
+</main>
+</div>
+
+<script src="../assets/katex/katex.min.js"></script>
+<script src="../assets/katex/auto-render.min.js"></script>
+<script src="../assets/plotly/plotly.min.js"></script>
+<script src="../assets/course.js"></script>
+<script src="outputs/results.js"></script>
+<script src="report_widgets.js"></script>
+<script>window.addEventListener('DOMContentLoaded', function(){ CourseUI.renderMath(document.body); });</script>
+</body>
+</html>
